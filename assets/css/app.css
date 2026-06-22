@@ -590,8 +590,12 @@ body{overflow:auto}
 
 /* Inicio */
 .launch-map{
+  position:fixed;
+  z-index:3000;
+  inset:0;
+  width:100%;
   min-height:100vh;
-  position:relative;
+  height:100dvh;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -665,7 +669,7 @@ body{overflow:auto}
 .launch-field{margin-bottom:14px}
 .launch-action{width:100%;justify-content:space-between;margin-top:16px}
 .launch-card .dataset-availability{margin-top:12px}
-.launch-card 
+
 /* Aplicación cartográfica */
 .geo-app{
   display:none;

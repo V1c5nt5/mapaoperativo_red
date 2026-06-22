@@ -4,15 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#8f2018">
-<meta name="description" content="Consulta recorridos, paraderos, horarios y buses en circulación en Santiago.">
 <title>Mapa Operativo RED — Santiago</title>
-<!-- v2.2.3 public -->
+<!-- v2.2.4 public -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<link rel="stylesheet" href="assets/css/app.css?v=2.2.3">
+<link rel="stylesheet" href="assets/css/app.css?v=2.2.4">
 </head>
 <body>
 
@@ -127,6 +126,13 @@
         <span><i class="legend-line regreso"></i> Regreso</span>
         <span><i class="legend-dot inicio"></i> Inicio</span>
         <span><i class="legend-dot fin"></i> Fin</span>
+      </div>
+
+      <div class="map-legend floating traffic-map-legend" id="traffic-map-legend" aria-label="Leyenda de congestión">
+        <span><i class="traffic-swatch traffic-free"></i> Fluido</span>
+        <span><i class="traffic-swatch traffic-medium"></i> Medio</span>
+        <span><i class="traffic-swatch traffic-heavy"></i> Congestión</span>
+        <span><i class="traffic-swatch traffic-closed"></i> Detenido</span>
       </div>
 
       <div class="map-legend floating bus-map-legend" id="bus-map-legend" aria-label="Leyenda de buses">
@@ -359,7 +365,7 @@
             <div class="fg"><label for="param-sheet-select">Indicador y período</label><select id="param-sheet-select"><option value="">Selecciona una fecha</option></select></div>
             <div class="panel-actions">
               <button class="primary-action compact-action" type="button" onclick="loadSelectedParams()">Ver indicadores</button>
-              <button class="secondary-action" type="button" onclick="syncParamRouteFromCurrent()">Usar recorrido actual</button>
+              <button class="secondary-action" type="button" onclick="syncParamRouteFromGTFS()">Usar recorrido actual</button>
             </div>
           </div>
           <div class="status-line" id="param-status">Selecciona una fecha para ver los indicadores.</div>
@@ -367,11 +373,11 @@
           <div id="param-panel" style="display:none">
             <div class="filter-stack">
               <div class="filter-row">
-                <div class="fg"><label>Operador</label><select id="param-operator"></select></div>
+                <div class="fg"><label>Unidad</label><select id="param-operator"></select></div>
                 <div class="fg"><label>Sentido</label><select id="param-sentido"></select></div>
               </div>
               <div class="fg"><label>Tipo</label><select id="param-tipo"></select></div>
-              <div class="fg"><label>Buscar recorrido</label><input type="text" id="param-route-search" placeholder="Código usuario o TS" autocomplete="off"></div>
+              <div class="fg"><label>Buscar servicio</label><input type="text" id="param-route-search" placeholder="Código usuario o TS" autocomplete="off"></div>
             </div>
             <div class="metric-strip vertical-metrics" id="param-summary"></div>
           </div>
@@ -418,7 +424,7 @@
           </div>
 
           <div class="simulation-status panel-status">
-            <strong id="sim-count">0 buses estimados</strong>
+            <strong id="sim-count">0 buses activos</strong>
             <span>Avanza 10 minutos cada 2 segundos.</span>
           </div>
 
@@ -445,7 +451,7 @@
           <div class="filter-stack">
             <div class="fg"><label>Fecha anterior</label><select id="compare-base-select"><option value="">Buscando fechas…</option></select></div>
             <div class="fg"><label>Fecha posterior</label><select id="compare-target-select"><option value="">Buscando fechas…</option></select></div>
-            <button class="primary-action compact-action full-width" type="button" onclick="compareSelectedDates()">Comparar fechas</button>
+            <button class="primary-action compact-action full-width" type="button" onclick="compareSelectedGTFS()">Comparar fechas</button>
           </div>
           <div id="compare-hint" class="status-line">Selecciona dos fechas para ver los cambios.</div>
           <div id="compare-summary" class="compare-summary compact-compare-summary"></div>
@@ -465,8 +471,8 @@
                 </div>
                 <div class="table-note" id="compare-analysis-note"></div>
                 <div class="sheet-grid two">
-                  <article class="sheet-card"><div class="card-head"><div><span class="card-kicker">Nuevos</span><h3>Recorridos creados</h3></div></div><div id="routes-created-wrap" class="compare-list"></div></article>
-                  <article class="sheet-card"><div class="card-head"><div><span class="card-kicker">Retirados</span><h3>Recorridos eliminados</h3></div></div><div id="routes-deleted-wrap" class="compare-list"></div></article>
+                  <article class="sheet-card"><div class="card-head"><div><span class="card-kicker">Altas</span><h3>Recorridos creados</h3></div></div><div id="routes-created-wrap" class="compare-list"></div></article>
+                  <article class="sheet-card"><div class="card-head"><div><span class="card-kicker">Bajas</span><h3>Recorridos eliminados</h3></div></div><div id="routes-deleted-wrap" class="compare-list"></div></article>
                 </div>
                 <div class="sheet-grid two">
                   <article class="sheet-card"><div class="card-head"><div><span class="card-kicker">Resumen</span><h3>Recorridos modificados</h3></div></div><div id="routes-modified-wrap" class="compare-list"></div></article>
@@ -488,7 +494,7 @@
     <button class="tab-btn active" data-tab="resumen" onclick="switchTab('resumen')"><span class="dock-icon">⌖</span><span>Mapa</span></button>
     <button class="tab-btn" data-tab="buses" onclick="switchTab('buses')"><span class="dock-icon">••</span><span>Buses</span></button>
     <button class="tab-btn" data-tab="ruta" onclick="switchTab('ruta')"><span class="dock-icon">↝</span><span>Trazado</span></button>
-    <button class="tab-btn" data-tab="paradero" onclick="switchTab('paradero')"><span class="dock-icon">●</span><span>Paraderos</span></button>
+    <button class="tab-btn" data-tab="paradero" onclick="switchTab('paradero')"><span class="dock-icon">●</span><span>Ubicación</span></button>
     <button class="tab-btn" data-tab="parametros" onclick="switchTab('parametros')"><span class="dock-icon">≡</span><span>Indicadores</span></button>
     <button class="tab-btn" data-tab="simulacion" onclick="switchTab('simulacion')"><span class="dock-icon">▶</span><span>Estimación</span></button>
     <button class="tab-btn" data-tab="comparar" onclick="switchTab('comparar')"><span class="dock-icon">⇄</span><span>Comparar</span></button>
@@ -496,6 +502,6 @@
 
 </div>
 
-<script src="assets/js/app.js?v=2.2.3"></script>
+<script src="assets/js/app.js?v=2.2.4"></script>
 </body>
 </html>
