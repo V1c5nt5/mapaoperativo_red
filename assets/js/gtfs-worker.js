@@ -1,4 +1,4 @@
-/* v1.3.0 — procesador GTFS fuera del hilo principal */
+/* v2.0.0 — procesador GTFS fuera del hilo principal */
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js');
 

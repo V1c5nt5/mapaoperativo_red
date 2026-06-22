@@ -1,4 +1,4 @@
-/* v1.3.0 — lógica principal de RED Analítica GTFS
+/* v2.0.0 — lógica principal del Mapa Operativo RED
    Separado desde el HTML para facilitar mantenimiento en GitHub Pages. */
 
 var SVC = {L:'Lunes a Viernes', S:'Sábado', D:'Domingo', F:'Festivo', LJ:'Lun a Jue', V:'Viernes'};
@@ -13,7 +13,6 @@ var GITHUB_DECO_FILES = [];
 var GITHUB_PARAM_FILES = [];
 var START_DATASET = null;
 var DATASET_MAX_GAP_DAYS = 6;
-var MANUAL_GTFS_FILE = null, MANUAL_DECO_FILE = null;
 function freshData(){
   return {
     agency:{}, routes:{}, trips:{}, frequencies:[], frequenciesByTrip:{}, stopTimes:{}, stops:{}, stopIndex:{}, stopTrips:{}, shapes:{},
@@ -35,16 +34,6 @@ var PARAMS = {
   file:null, zip:null, sheets:[], sharedStrings:null, cache:{}, activeSheet:null, rows:[], intervals:[], metric:'', sourceDate:null, loading:false
 };
 
-
-var dropzone = document.getElementById('dropzone');
-var fileInput = document.getElementById('file-input');
-if(dropzone){
-  dropzone.addEventListener('dragover', function(e){ e.preventDefault(); dropzone.classList.add('drag'); });
-  dropzone.addEventListener('dragleave', function(){ dropzone.classList.remove('drag'); });
-}
-if(fileInput) fileInput.addEventListener('change', function(e){ MANUAL_GTFS_FILE=e.target.files[0]||null; updateManualLabel(); });
-var decoFileInput = document.getElementById('deco-file-input');
-if(decoFileInput) decoFileInput.addEventListener('change', function(e){ MANUAL_DECO_FILE=e.target.files[0]||null; updateManualLabel(); });
 
 async function initGitHubGTFSList(){
   var fallbackGtfs=[
@@ -282,17 +271,6 @@ async function loadSelectedMainGTFS(){
     prog(0,'No se pudo descargar el GTFS seleccionado desde GitHub.');
   }
 }
-function updateManualLabel(){
-  var el=document.getElementById('manual-files-label'); if(!el) return;
-  var g=MANUAL_GTFS_FILE ? (MANUAL_GTFS_FILE.name||'GTFS seleccionado') : 'GTFS pendiente';
-  var d=MANUAL_DECO_FILE ? (MANUAL_DECO_FILE.name||'DECO seleccionado') : 'DECO pendiente';
-  el.textContent=g+' · '+d;
-}
-async function loadManualPair(){
-  if(!MANUAL_GTFS_FILE){ alert('Debes seleccionar un GTFS antes de cargar.'); return; }
-  await handleFile(MANUAL_GTFS_FILE,MANUAL_DECO_FILE,null);
-}
-
 document.addEventListener('DOMContentLoaded', initGitHubGTFSList);
 
 function prog(pct, txt){
@@ -535,6 +513,7 @@ async function handleFile(file, decoFile, paramItem){
       buildUI();
       initMap();
       renderMap();
+      setMapContext('resumen');
     },120);
   }catch(err){
     console.error(err);
@@ -1411,7 +1390,7 @@ function renderStopMap(stopId){
   if(!stop||stop.stop_lat===null||stop.stop_lon===null){
     initStopMap();
     if(stopMarker){stopLeafMap.removeLayer(stopMarker);stopMarker=null;}
-    stopLeafMap.setView([-33.45,-70.65],11);
+    fitSantiago(stopLeafMap);
     L.popup().setLatLng([-33.45,-70.65]).setContent('Este paradero no tiene coordenadas válidas en stops.txt.').openOn(stopLeafMap);
     return;
   }
@@ -1445,6 +1424,9 @@ function selectStop(stopId){
   document.getElementById('stop-search').value=cleanName(stop.stop_name||stopId);
   activeStop=stopId; updateStopServiceOptions(stopId); renderStop(stopId);
   document.getElementById('stop-detail').style.display='block'; document.getElementById('stop-hint').style.display='none';
+  var panel=document.getElementById('tab-paradero');
+  var sheet=panel?panel.querySelector('.details-sheet'):null;
+  if(sheet) sheet.classList.add('is-open');
 }
 function computeArrivals(stopId, svcId){
   var entries=(DATA.stopTrips[stopId]||[]).filter(function(e){ var trip=DATA.trips[e.trip_id];return trip&&trip.service_id===svcId; });
@@ -1958,6 +1940,9 @@ function renderCompareAnalysis(){
 function renderCompare(cmp, oldFeed, newFeed){
   COMPARE_STATE={cmp:cmp,oldFeed:oldFeed,newFeed:newFeed};
   document.getElementById('compare-results').style.display='block';
+  var comparePanel=document.getElementById('tab-comparar');
+  var compareSheet=comparePanel?comparePanel.querySelector('.details-sheet'):null;
+  if(compareSheet) compareSheet.classList.add('is-open');
   document.getElementById('compare-hint').style.display='none';
   var freqGroups=frequencyChangesByRoute(cmp.freqChanges);
   var improved=freqGroups.filter(function(g){return g.trend==='Mejora';}).length;
@@ -2009,7 +1994,7 @@ async function compareSelectedGTFS(){
 }
 
 
-/* v1.3.0 — simulación GTFS y salidas por recorrido */
+/* v2.0.0 — simulación GTFS y salidas por recorrido */
 function setupSimulationSelectors(){
   fillOperatorSelect('sim-operator');
   var simR=document.getElementById('sim-route');
@@ -2237,26 +2222,141 @@ document.addEventListener('visibilitychange',function(){
   if(document.hidden) stopSimAuto();
 });
 
-/* Navegación final: Simulación GTFS y Comparar GTFS */
+/* Navegación cartográfica */
+var CURRENT_MAP_MODE='resumen';
 
-function toggleSidebar(force){
-  var open=typeof force==='boolean'?force:!document.body.classList.contains('sidebar-open');
-  document.body.classList.toggle('sidebar-open',open);
+function fitSantiago(mapInstance){
+  if(!mapInstance) return;
+  mapInstance.fitBounds(
+    [[-33.72,-70.98],[-33.27,-70.42]],
+    {padding:[18,18],maxZoom:11}
+  );
+}
+
+function toggleContextPanel(force){
+  var panel=document.getElementById('context-panel');
+  if(!panel) return;
+  var collapsed=typeof force==='boolean'?!force:!panel.classList.contains('is-collapsed');
+  panel.classList.toggle('is-collapsed',collapsed);
+  document.body.classList.toggle('context-collapsed',collapsed);
+  setTimeout(function(){
+    if(leafMap) leafMap.invalidateSize();
+    if(stopLeafMap) stopLeafMap.invalidateSize();
+    if(simMap) simMap.invalidateSize();
+  },240);
+}
+function toggleDetailsSheet(force){
+  var panel=document.getElementById('tab-'+CURRENT_MAP_MODE);
+  var sheet=panel?panel.querySelector('.details-sheet'):null;
+  if(!sheet) return;
+  var open=typeof force==='boolean'?force:!sheet.classList.contains('is-open');
+  sheet.classList.toggle('is-open',open);
+  var button=sheet.querySelector('.sheet-toggle');
+  if(button) button.textContent=open?'Ocultar':'Ver detalles';
+  setTimeout(function(){
+    if(leafMap) leafMap.invalidateSize();
+    if(stopLeafMap) stopLeafMap.invalidateSize();
+    if(simMap) simMap.invalidateSize();
+    if(freqChart) freqChart.resize();
+    if(stopChart) stopChart.resize();
+    if(overviewChart) overviewChart.resize();
+  },260);
+}
+function clearRouteLayers(){
+  if(!leafMap) return;
+  if(layerIda&&leafMap.hasLayer(layerIda)) leafMap.removeLayer(layerIda);
+  if(layerReg&&leafMap.hasLayer(layerReg)) leafMap.removeLayer(layerReg);
+  if(layerStops&&leafMap.hasLayer(layerStops)) leafMap.removeLayer(layerStops);
+  layerIda=null;layerReg=null;layerStops=null;
+}
+function mapContextLabel(tab){
+  if(tab==='ruta'){
+    var sel=document.getElementById('sel-route');
+    var route=sel&&sel.value?DATA.routes[sel.value]:null;
+    return route?'Recorrido '+(route.route_short_name||route.route_id):'Trazado de recorrido';
+  }
+  if(tab==='paradero'){
+    if(activeStop&&DATA.stops[activeStop]) return cleanName(DATA.stops[activeStop].stop_name||activeStop);
+    return 'Buscar ubicación';
+  }
+  if(tab==='simulacion') return 'Simulación GTFS';
+  if(tab==='comparar') return 'Comparación de publicaciones';
+  if(tab==='parametros') return 'Parámetros operacionales';
+  return 'Santiago completo';
+}
+function setMapContext(tab){
+  CURRENT_MAP_MODE=tab;
+  document.body.setAttribute('data-map-mode',tab);
+  document.querySelectorAll('.geo-map').forEach(function(el){el.classList.remove('is-active');});
+  var routeMap=document.getElementById('map');
+  var stopMapEl=document.getElementById('stop-map');
+  var simMapEl=document.getElementById('sim-map');
+  var target=routeMap;
+
+  if(tab==='paradero'){
+    target=stopMapEl;
+    if(target) target.classList.add('is-active');
+    initStopMap();
+    if(!activeStop) fitSantiago(stopLeafMap);
+    setTimeout(function(){stopLeafMap.invalidateSize();if(activeStop)renderStopMap(activeStop);},50);
+  }else if(tab==='simulacion'){
+    target=simMapEl;
+    if(target) target.classList.add('is-active');
+    initSimulationMap();
+    setTimeout(function(){simMap.invalidateSize();renderSimulation();},50);
+  }else{
+    target=routeMap;
+    if(target) target.classList.add('is-active');
+    if(!leafMap) initMap();
+    if(tab==='ruta'){
+      renderMap();
+      setTimeout(function(){leafMap.invalidateSize();fitRouteMap();},50);
+    }else{
+      clearRouteLayers();
+      fitSantiago(leafMap);
+      setTimeout(function(){leafMap.invalidateSize();},50);
+    }
+  }
+  var label=document.getElementById('map-context-label');
+  if(label) label.textContent=mapContextLabel(tab);
+}
+function resetCurrentMapView(){
+  if(CURRENT_MAP_MODE==='ruta'){
+    fitRouteMap();
+    return;
+  }
+  if(CURRENT_MAP_MODE==='paradero'){
+    if(activeStop) renderStopMap(activeStop);
+    else if(stopLeafMap) fitSantiago(stopLeafMap);
+    return;
+  }
+  if(CURRENT_MAP_MODE==='simulacion'){
+    if(simMap){
+      simShapeKey='';
+      renderSimulation();
+      if(!simShapeLayer) fitSantiago(simMap);
+    }
+    return;
+  }
+  if(leafMap) fitSantiago(leafMap);
 }
 document.addEventListener('keydown',function(e){
-  if(e.key==='Escape') toggleSidebar(false);
+  if(e.key==='Escape'){
+    toggleDetailsSheet(false);
+    toggleContextPanel(true);
+  }
 });
 
 function switchTab(tab){
   var available=tabAvailability();
   if(!available[tab]) return;
   var meta={
-    resumen:['Vista general','Resumen de la publicación'],
-    ruta:['Análisis operacional','Recorridos'],
-    paradero:['Puntos de detención','Paraderos'],
-    parametros:['Estándares de operación','Parámetros'],
-    simulacion:['Representación temporal','Simulación GTFS'],
-    comparar:['Cambios entre versiones','Comparación de publicaciones']
+    resumen:['Cobertura metropolitana','Mapa de Santiago','Vista general'],
+    ruta:['Geometría y operación','Trazado de recorrido','Trazado'],
+    paradero:['Puntos de detención','Ubicación de paradero','Ubicación'],
+    parametros:['Fuente complementaria','Parámetros operacionales','Parámetros'],
+    simulacion:['Representación temporal','Simulación GTFS','Simulación'],
+    comparar:['Evolución de publicaciones','Comparar GTFS','Comparación']
   };
   document.querySelectorAll('.tab-btn[data-tab]').forEach(function(button){
     button.classList.toggle('active',button.getAttribute('data-tab')===tab);
@@ -2267,19 +2367,20 @@ function switchTab(tab){
   });
   var title=document.getElementById('page-title');
   var eyebrow=document.getElementById('page-eyebrow');
-  if(title) title.textContent=(meta[tab]||['',tab])[1];
-  if(eyebrow) eyebrow.textContent=(meta[tab]||['',''])[0];
-  document.title=(meta[tab]?meta[tab][1]:'RED Analítica')+' — RED Analítica GTFS';
+  var panelTitle=document.getElementById('context-panel-title');
+  if(title) title.textContent=(meta[tab]||['',tab,''])[1];
+  if(eyebrow) eyebrow.textContent=(meta[tab]||['','',''])[0];
+  if(panelTitle) panelTitle.textContent=(meta[tab]||['','',tab])[2];
+  document.title=(meta[tab]?meta[tab][1]:'Mapa Operativo RED')+' — Mapa Operativo RED';
+
   if(tab!=='simulacion') stopSimAuto();
+  setMapContext(tab);
+
   if(tab==='resumen'){
     renderOverview();
-    if(overviewChart) setTimeout(function(){overviewChart.resize();},40);
+    if(overviewChart) setTimeout(function(){overviewChart.resize();},80);
   }
-  if(tab==='ruta'&&leafMap) setTimeout(function(){leafMap.invalidateSize();fitRouteMap();},60);
-  if(tab==='paradero'&&stopLeafMap) setTimeout(function(){stopLeafMap.invalidateSize();renderStopMap(activeStop);},70);
   if(tab==='parametros') ensureParamsLoaded();
-  if(tab==='simulacion') setTimeout(function(){initSimulationMap();syncSimulationFromRoute();simMap.invalidateSize();renderSimulation();},70);
-  toggleSidebar(false);
-  window.scrollTo({top:0,behavior:'auto'});
+  if(tab==='simulacion') setTimeout(function(){syncSimulationFromRoute();renderSimulation();},70);
 }
 
