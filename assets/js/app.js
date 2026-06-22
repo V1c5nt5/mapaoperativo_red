@@ -1,4 +1,4 @@
-/* v2.0.0 — lógica principal del Mapa Operativo RED
+/* v2.1.0 — lógica principal del Mapa Operativo RED
    Separado desde el HTML para facilitar mantenimiento en GitHub Pages. */
 
 var SVC = {L:'Lunes a Viernes', S:'Sábado', D:'Domingo', F:'Festivo', LJ:'Lun a Jue', V:'Viernes'};
@@ -23,6 +23,7 @@ function freshData(){
 }
 var freqChart = null, stopChart = null, overviewChart = null;
 var leafMap = null, layerIda = null, layerReg = null, layerStops = null, routeMapBounds = null;
+var trafficLayer = null, trafficRefreshTimer = null, trafficKey = '', trafficHadError = false;
 var simMap = null, simShapeLayer = null, simVehicleLayer = null, simShapeKey = '';
 var simSelectedMinute = 480;
 var simAutoTimer = null;
@@ -527,6 +528,7 @@ function tabAvailability(){
   var params=!!(DATA.availableSources && DATA.availableSources.param);
   return {
     resumen:gtfs,
+    trafico:gtfs,
     ruta:gtfs,
     paradero:gtfs,
     parametros:params,
@@ -546,7 +548,7 @@ function configureAvailableTabs(){
     var panel=document.getElementById('tab-'+tab);
     if(panel && !available[tab]) panel.style.display='none';
   });
-  var first=['resumen','ruta','paradero','parametros','simulacion','comparar'].find(function(tab){return available[tab];});
+  var first=['resumen','trafico','ruta','paradero','parametros','simulacion','comparar'].find(function(tab){return available[tab];});
   if(first) switchTab(first);
 }
 
@@ -1077,6 +1079,91 @@ function initMap(){
   leafMap=L.map('map',{zoomControl:false,preferCanvas:true}).setView([-33.45,-70.65],11);
   addInstitutionalTiles(leafMap,19);
   L.control.zoom({position:'topright'}).addTo(leafMap);
+}
+
+function trafficTileUrl(key){
+  return 'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?tileSize=256&key='+encodeURIComponent(key);
+}
+function setTrafficStatus(title, detail, state){
+  var box=document.getElementById('traffic-status');
+  if(!box) return;
+  box.className='panel-status traffic-status'+(state?' is-'+state:'');
+  box.innerHTML='<strong>'+esc(title)+'</strong><span>'+esc(detail)+'</span>';
+}
+function startTrafficRefresh(){
+  stopTrafficRefresh();
+  if(CURRENT_MAP_MODE!=='trafico' || !trafficLayer || !trafficKey) return;
+  trafficRefreshTimer=setInterval(function(){
+    if(document.hidden || CURRENT_MAP_MODE!=='trafico') return;
+    refreshTrafficLayer(true);
+  },300000);
+}
+function stopTrafficRefresh(){
+  if(trafficRefreshTimer){
+    clearInterval(trafficRefreshTimer);
+    trafficRefreshTimer=null;
+  }
+}
+function attachTrafficLayer(){
+  if(!leafMap || !trafficLayer || CURRENT_MAP_MODE!=='trafico') return;
+  if(!leafMap.hasLayer(trafficLayer)) trafficLayer.addTo(leafMap);
+}
+function detachTrafficLayer(){
+  if(leafMap && trafficLayer && leafMap.hasLayer(trafficLayer)) leafMap.removeLayer(trafficLayer);
+}
+function enableTrafficLayer(){
+  var input=document.getElementById('traffic-api-key');
+  var key=String(input&&input.value||'').trim();
+  if(!key){
+    setTrafficStatus('Falta la clave API','Ingresa una clave válida para solicitar la capa de tránsito.','error');
+    if(input) input.focus();
+    return;
+  }
+  initMap();
+  trafficKey=key;
+  trafficHadError=false;
+  if(trafficLayer) detachTrafficLayer();
+  trafficLayer=L.tileLayer(trafficTileUrl(trafficKey),{
+    attribution:'Traffic flow &copy; TomTom',
+    opacity:0.78,
+    maxZoom:19,
+    updateWhenIdle:true,
+    keepBuffer:2
+  });
+  trafficLayer.on('tileerror',function(){
+    if(trafficHadError) return;
+    trafficHadError=true;
+    setTrafficStatus('No se pudo cargar el tránsito','Revisa la clave, su vigencia, el límite de uso y la conexión.','error');
+  });
+  trafficLayer.on('load',function(){
+    if(trafficHadError) return;
+    var stamp=new Intl.DateTimeFormat('es-CL',{hour:'2-digit',minute:'2-digit'}).format(new Date());
+    setTrafficStatus('Tránsito activo','Capa cargada a las '+stamp+'. Actualización automática cada 5 minutos.','ready');
+  });
+  attachTrafficLayer();
+  fitSantiago(leafMap);
+  setTrafficStatus('Cargando tránsito','Solicitando el flujo vial actual para el área visible…','loading');
+  startTrafficRefresh();
+}
+function refreshTrafficLayer(silent){
+  if(!trafficLayer || !trafficKey){
+    if(!silent) setTrafficStatus('Tránsito no activado','Ingresa una clave y presiona “Mostrar tránsito”.','error');
+    return;
+  }
+  trafficHadError=false;
+  trafficLayer.setUrl(trafficTileUrl(trafficKey));
+  attachTrafficLayer();
+  if(!silent) setTrafficStatus('Actualizando tránsito','Solicitando una versión reciente de la capa…','loading');
+}
+function disableTrafficLayer(){
+  stopTrafficRefresh();
+  detachTrafficLayer();
+  trafficLayer=null;
+  trafficKey='';
+  trafficHadError=false;
+  var input=document.getElementById('traffic-api-key');
+  if(input) input.value='';
+  setTrafficStatus('Tránsito desactivado','La clave fue eliminada de esta sesión.','');
 }
 function setMapDir(dir, skipRender){
   curMapDir = Number(dir);
@@ -2279,6 +2366,7 @@ function mapContextLabel(tab){
     if(activeStop&&DATA.stops[activeStop]) return cleanName(DATA.stops[activeStop].stop_name||activeStop);
     return 'Buscar ubicación';
   }
+  if(tab==='trafico') return 'Tránsito actual de Santiago';
   if(tab==='simulacion') return 'Simulación GTFS';
   if(tab==='comparar') return 'Comparación de publicaciones';
   if(tab==='parametros') return 'Parámetros operacionales';
@@ -2287,6 +2375,10 @@ function mapContextLabel(tab){
 function setMapContext(tab){
   CURRENT_MAP_MODE=tab;
   document.body.setAttribute('data-map-mode',tab);
+  if(tab!=='trafico'){
+    detachTrafficLayer();
+    stopTrafficRefresh();
+  }
   document.querySelectorAll('.geo-map').forEach(function(el){el.classList.remove('is-active');});
   var routeMap=document.getElementById('map');
   var stopMapEl=document.getElementById('stop-map');
@@ -2313,6 +2405,10 @@ function setMapContext(tab){
       setTimeout(function(){leafMap.invalidateSize();fitRouteMap();},50);
     }else{
       clearRouteLayers();
+      if(tab==='trafico'){
+        attachTrafficLayer();
+        startTrafficRefresh();
+      }
       fitSantiago(leafMap);
       setTimeout(function(){leafMap.invalidateSize();},50);
     }
@@ -2352,6 +2448,7 @@ function switchTab(tab){
   if(!available[tab]) return;
   var meta={
     resumen:['Cobertura metropolitana','Mapa de Santiago','Vista general'],
+    trafico:['Flujo vial en tiempo real','Tránsito actual de Santiago','Tránsito'],
     ruta:['Geometría y operación','Trazado de recorrido','Trazado'],
     paradero:['Puntos de detención','Ubicación de paradero','Ubicación'],
     parametros:['Fuente complementaria','Parámetros operacionales','Parámetros'],
@@ -2361,7 +2458,7 @@ function switchTab(tab){
   document.querySelectorAll('.tab-btn[data-tab]').forEach(function(button){
     button.classList.toggle('active',button.getAttribute('data-tab')===tab);
   });
-  ['resumen','ruta','paradero','parametros','simulacion','comparar'].forEach(function(name){
+  ['resumen','trafico','ruta','paradero','parametros','simulacion','comparar'].forEach(function(name){
     var panel=document.getElementById('tab-'+name);
     if(panel) panel.style.display=name===tab?'block':'none';
   });

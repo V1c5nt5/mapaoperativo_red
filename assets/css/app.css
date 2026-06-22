@@ -1,4 +1,4 @@
-/* v2.0.0 — interfaz institucional y analítica */
+/* v2.1.0 — interfaz institucional y analítica */
 *,*::before,*::after{box-sizing:border-box}
 :root{
   --red:#98251c;
@@ -129,7 +129,7 @@ svg{display:block}
   text-transform:uppercase;
   letter-spacing:.055em;
 }
-select,input[type=text]{
+select,input[type=text],input[type=password]{
   width:100%;
   min-height:42px;
   padding:9px 38px 9px 12px;
@@ -149,7 +149,7 @@ select{
   background-size:5px 5px,5px 5px;
   background-repeat:no-repeat;
 }
-select:focus,input[type=text]:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(152,37,28,.1)}
+select:focus,input[type=text]:focus,input[type=password]:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(152,37,28,.1)}
 select:disabled{background-color:#f0f2f3;color:var(--muted-2)}
 .primary-action,.secondary-action,.icon-action,.text-action{
   border:0;border-radius:var(--radius-sm);font-weight:650;
@@ -586,7 +586,7 @@ thead .sticky-col{z-index:3;background:#f7f9fa}
 
 
 /* =========================================================
-   v2.0.0 — arquitectura cartográfica
+   v2.1.0 — arquitectura cartográfica
    El mapa es la superficie principal; los análisis se abren
    como paneles flotantes y bandejas contextuales.
    ========================================================= */
@@ -799,6 +799,31 @@ body{overflow:auto}
   display:none;
 }
 body[data-map-mode="ruta"] .map-global-legend{display:flex}
+.traffic-map-legend{
+  left:auto!important;right:16px!important;bottom:16px!important;
+  z-index:620;
+  display:none;
+  flex-wrap:wrap;
+  max-width:410px;
+}
+body[data-map-mode="trafico"] .traffic-map-legend{display:flex}
+.traffic-swatch{
+  width:24px;height:5px;display:inline-block;border-radius:999px;
+}
+.traffic-free{background:#16a34a}
+.traffic-medium{background:#eab308}
+.traffic-heavy{background:#ef4444}
+.traffic-closed{background:#7f1d1d}
+.traffic-status{margin-top:14px}
+.traffic-status.is-ready{border-color:#9dcfa9;background:#f4fbf6}
+.traffic-status.is-loading{border-color:#d8c88f;background:#fffaf0}
+.traffic-status.is-error{border-color:#e1aaa6;background:#fff5f4}
+.traffic-provider-note{
+  margin-top:14px;padding-top:14px;border-top:1px solid var(--line);
+  color:var(--muted);font-size:11px;line-height:1.5;
+}
+.traffic-provider-note strong{display:block;color:var(--ink);margin-bottom:3px}
+.traffic-provider-note a{display:inline-block;margin-top:7px;color:var(--red);font-weight:650}
 
 /* Panel contextual */
 .context-panel{
@@ -844,7 +869,7 @@ body[data-map-mode="ruta"] .map-global-legend{display:flex}
 .filter-stack{display:grid;gap:11px}
 .filter-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .filter-row .fg{min-width:0}
-.context-panel select,.context-panel input[type=text]{
+.context-panel select,.context-panel input[type=text],.context-panel input[type=password]{
   width:100%;
   min-width:0;
   background:#fff;
@@ -1105,7 +1130,7 @@ body[data-map-mode="comparar"] .details-sheet.is-open{transform:translateY(0)}
   .map-top-tools{top:8px;left:8px;right:8px;justify-content:space-between}
   .map-location-chip{max-width:58%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
   .geo-map .leaflet-control-zoom{margin-top:58px!important;margin-right:8px!important}
-  .map-global-legend{display:none!important}
+  .map-global-legend,.traffic-map-legend{display:none!important}
   .details-sheet{
     left:8px!important;right:8px;
     bottom:calc(var(--geo-dock) + 8px);
