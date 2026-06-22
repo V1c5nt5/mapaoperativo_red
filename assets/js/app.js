@@ -1,4 +1,4 @@
-/* v2.2.1 — lógica principal del Mapa Operativo RED
+/* v2.2.3 public — lógica principal del Mapa Operativo RED
    Separado desde el HTML para facilitar mantenimiento en GitHub Pages. */
 
 var SVC = {L:'Lunes a Viernes', S:'Sábado', D:'Domingo', F:'Festivo', LJ:'Lun a Jue', V:'Viernes'};
@@ -26,7 +26,6 @@ function freshData(){
 }
 var freqChart = null, stopChart = null, overviewChart = null;
 var leafMap = null, layerIda = null, layerReg = null, layerStops = null, routeMapBounds = null;
-var trafficLayer = null, trafficRefreshTimer = null, trafficKey = '', trafficHadError = false;
 var BUS_ENDPOINTS = [
   'https://velocidades.seguimos.cl/?all-buses-data=1',
   'https://velocidades.seguimos.cl/?all-buses-data=2'
@@ -121,7 +120,8 @@ function fillOneSelect(id, files, placeholder, selectedIndex){
   files.forEach(function(f,i){
     var o=document.createElement('option');
     o.value=f.download_url;
-    o.textContent=f.name;
+    var itemDate=extractDateFromName(f.name);
+    o.textContent=itemDate?formatDatasetDate(itemDate):'Fecha disponible';
     o.dataset.name=f.name;
     sel.appendChild(o);
     if(i===selectedIndex) o.selected=true;
@@ -166,9 +166,9 @@ function newestDatedFile(files){
 }
 function launchAvailabilityCard(label,item){
   if(!item){
-    return '<div class="availability-item missing"><span class="availability-label">'+esc(label)+'</span><strong>No disponible</strong><small>No se encontró un archivo vigente verificable.</small></div>';
+    return '<div class="availability-item missing"><span class="availability-label">'+esc(label)+'</span><strong>No disponible</strong><small>No se encontró información reciente.</small></div>';
   }
-  return '<div class="availability-item available"><span class="availability-label">'+esc(label)+'</span><strong>Más reciente</strong><small>'+esc(item.file.name)+' · '+esc(formatDatasetDate(item.date))+'</small></div>';
+  return '<div class="availability-item available"><span class="availability-label">'+esc(label)+'</span><strong>Disponible</strong><small>'+esc(formatDatasetDate(item.date))+'</small></div>';
 }
 function setLaunchMode(mode){
   APP_MODE=mode==='realtime'?'realtime':'static';
@@ -201,23 +201,23 @@ function updateRealtimeAvailability(){
   var decoItem=newestDatedFile(vigenteDeco.length?vigenteDeco:verifiedDeco);
   REALTIME_DATASET={gtfs:gtfsItem,deco:decoItem};
 
-  if(label && APP_MODE==='realtime') label.textContent='Abrir monitoreo en tiempo real';
+  if(label && APP_MODE==='realtime') label.textContent='Abrir buses en tiempo real';
   if(!wrap || !note || !btn) return;
 
-  wrap.innerHTML=launchAvailabilityCard('DECO vigente',decoItem)+launchAvailabilityCard('GTFS vigente',gtfsItem);
+  wrap.innerHTML=launchAvailabilityCard('Buses y operadores',decoItem)+launchAvailabilityCard('Recorridos y trazados',gtfsItem);
   if(!GITHUB_CATALOG_LIVE){
-    note.textContent='No se pudo verificar el contenido actual de GitHub. Para evitar usar archivos antiguos, el monitoreo queda bloqueado.';
+    note.textContent='No se pudo verificar la información más reciente. Intenta nuevamente más tarde.';
     note.className='dataset-link-note is-warning';
     if(APP_MODE==='realtime') btn.disabled=true;
     return;
   }
   if(!decoItem || !gtfsItem){
-    note.textContent='GitHub respondió, pero no se encontraron ambos archivos vigentes. El monitoreo requiere DECO y GTFS.';
+    note.textContent='No se encontró toda la información necesaria para mostrar los buses en tiempo real.';
     note.className='dataset-link-note is-warning';
     if(APP_MODE==='realtime') btn.disabled=true;
     return;
   }
-  note.textContent='Selección automática y bloqueada. El DECO alimenta el monitoreo; el GTFS habilita el trazado y el detalle del recorrido.';
+  note.textContent='La información más reciente se selecciona automáticamente.';
   note.className='dataset-link-note is-ready';
   if(APP_MODE==='realtime') btn.disabled=false;
 }
@@ -252,10 +252,10 @@ function linkedDatasetForDate(targetDate){
   };
 }
 function availabilityDetail(item, targetDate){
-  if(!item) return 'No encontrado dentro de 6 días';
+  if(!item) return 'No disponible para esta fecha';
   var gap=dateGapDays(targetDate,item.date);
   var relation=gap===0 ? 'misma fecha' : (gap===1 ? '1 día de diferencia' : gap+' días de diferencia');
-  return esc(item.file.name)+' · '+relation;
+  return relation;
 }
 function availabilityCard(label,item,targetDate){
   var available=!!item;
@@ -276,7 +276,7 @@ function fillStartDateSelect(){
   if(!keys.length){
     var empty=document.createElement('option');
     empty.value='';
-    empty.textContent='No hay fechas GTFS disponibles';
+    empty.textContent='No hay fechas disponibles';
     sel.appendChild(empty);
     START_DATASET=null;
     updateStartDatasetAvailability();
@@ -301,9 +301,9 @@ function updateStartDatasetAvailability(){
   START_DATASET=targetDate ? linkedDatasetForDate(targetDate) : null;
 
   if(!wrap || !note || !btn) return;
-  if(buttonLabel && APP_MODE==='static') buttonLabel.textContent='Abrir información estática';
+  if(buttonLabel && APP_MODE==='static') buttonLabel.textContent='Abrir recorridos y horarios';
   if(!START_DATASET || !START_DATASET.gtfs){
-    wrap.innerHTML='<div class="availability-empty">No hay un GTFS con fecha válida para esta selección.</div>';
+    wrap.innerHTML='<div class="availability-empty">No hay información disponible para esta fecha.</div>';
     note.textContent='No hay datos base disponibles para cargar.';
     note.className='dataset-link-note is-warning';
     if(APP_MODE==='static') btn.disabled=true;
@@ -311,26 +311,26 @@ function updateStartDatasetAvailability(){
   }
 
   wrap.innerHTML=
-    availabilityCard('GTFS',START_DATASET.gtfs,targetDate)+
-    availabilityCard('DECO',START_DATASET.deco,targetDate)+
-    availabilityCard('Parámetros',START_DATASET.param,targetDate);
+    availabilityCard('Recorridos y horarios',START_DATASET.gtfs,targetDate)+
+    availabilityCard('Operadores y servicios',START_DATASET.deco,targetDate)+
+    availabilityCard('Indicadores',START_DATASET.param,targetDate);
 
   var missing=[];
-  if(!START_DATASET.deco) missing.push('DECO');
-  if(!START_DATASET.param) missing.push('Parámetros');
+  if(!START_DATASET.deco) missing.push('operadores y servicios');
+  if(!START_DATASET.param) missing.push('indicadores');
   if(!missing.length){
-    note.textContent='Conjunto completo disponible. Cada fuente está a un máximo de 6 días del GTFS.';
+    note.textContent='Toda la información de esta fecha está disponible.';
     note.className='dataset-link-note is-ready';
   }else{
-    note.textContent='Carga parcial disponible. No se encontró '+missing.join(' ni ')+' dentro de 6 días; se mostrarán solo las pestañas compatibles.';
+    note.textContent='Hay información parcial. No se encontraron '+missing.join(' ni ')+'.';
     note.className='dataset-link-note is-warning';
   }
   if(APP_MODE==='static') btn.disabled=false;
 }
 function fillGitHubSelects(){
-  fillOneSelect('compare-base-select',GITHUB_GTFS_FILES,'Sin GTFS disponibles',0);
-  fillOneSelect('compare-target-select',GITHUB_GTFS_FILES,'Sin GTFS disponibles',Math.max(0,GITHUB_GTFS_FILES.length-1));
-  fillOneSelect('param-file-select',GITHUB_PARAM_FILES,'Sin consolidado disponible',Math.max(0,GITHUB_PARAM_FILES.length-1));
+  fillOneSelect('compare-base-select',GITHUB_GTFS_FILES,'Sin fechas disponibles',0);
+  fillOneSelect('compare-target-select',GITHUB_GTFS_FILES,'Sin fechas disponibles',Math.max(0,GITHUB_GTFS_FILES.length-1));
+  fillOneSelect('param-file-select',GITHUB_PARAM_FILES,'Sin indicadores disponibles',Math.max(0,GITHUB_PARAM_FILES.length-1));
   fillStartDateSelect();
   updateRealtimeAvailability();
 }
@@ -357,14 +357,14 @@ async function fetchGTFSFileFromURL(url, name){
 async function loadSelectedMainGTFS(){
   APP_MODE='static';
   if(!START_DATASET || !START_DATASET.gtfs){
-    alert('No hay un GTFS disponible para la fecha seleccionada.');
+    alert('No hay información disponible para la fecha seleccionada.');
     return;
   }
   var gtfs=START_DATASET.gtfs.file;
   var deco=START_DATASET.deco ? START_DATASET.deco.file : null;
   var paramItem=START_DATASET.param || null;
   syncParamSelects('start');
-  prog(3,deco ? 'Descargando GTFS y DECO desde GitHub...' : 'Descargando GTFS desde GitHub...');
+  prog(3,deco ? 'Cargando recorridos y operadores…' : 'Cargando recorridos…');
   try{
     var file=await fetchGTFSFileFromURL(gtfs.download_url,gtfs.name);
     var decoFile=null;
@@ -372,26 +372,26 @@ async function loadSelectedMainGTFS(){
       try{
         decoFile=await fetchGTFSFileFromURL(deco.download_url,deco.name);
       }catch(decoErr){
-        console.warn('No se pudo descargar el DECO vinculado. Se continuará solo con GTFS.',decoErr);
+        console.warn('No se pudo descargar la información de operadores. Se continuará con los recorridos.',decoErr);
       }
     }
     await handleFile(file,decoFile,paramItem,'static');
   }
   catch(err){
     console.error(err);
-    prog(0,'No se pudo descargar el GTFS seleccionado desde GitHub.');
+    prog(0,'No se pudo cargar la información seleccionada.');
   }
 }
 async function loadLatestRealtime(){
   APP_MODE='realtime';
   updateRealtimeAvailability();
   if(!GITHUB_CATALOG_LIVE || !REALTIME_DATASET || !REALTIME_DATASET.deco || !REALTIME_DATASET.gtfs){
-    alert('No se pudo verificar un DECO y un GTFS vigentes directamente desde GitHub.');
+    alert('No se pudo verificar la información más reciente. Intenta nuevamente más tarde.');
     return;
   }
   var deco=REALTIME_DATASET.deco.file;
   var gtfs=REALTIME_DATASET.gtfs.file;
-  prog(3,'Descargando DECO y GTFS vigentes desde GitHub…');
+  prog(3,'Cargando la información más reciente…');
   try{
     var files=await Promise.all([
       fetchGTFSFileFromURL(gtfs.download_url,gtfs.name),
@@ -400,8 +400,8 @@ async function loadLatestRealtime(){
     await handleFile(files[0],files[1],null,'realtime');
   }catch(err){
     console.error(err);
-    prog(0,'No se pudieron descargar los archivos vigentes desde GitHub.');
-    alert('No se pudieron descargar el DECO y el GTFS vigentes. El monitoreo no utilizará respaldos antiguos.');
+    prog(0,'No se pudo cargar la información más reciente.');
+    alert('No se pudo cargar la información más reciente. El monitoreo no mostrará datos antiguos.');
   }
 }
 document.addEventListener('DOMContentLoaded', initGitHubGTFSList);
@@ -460,7 +460,7 @@ function daysAgo(dt){
   return Math.floor((a-b)/86400000);
 }
 function ageText(label, dt){
-  var d=daysAgo(dt); if(d===null) return label+': fecha no detectada';
+  var d=daysAgo(dt); if(d===null) return label+': fecha no disponible';
   if(d===0) return label+': datos de hoy';
   if(d===1) return label+': datos de hace 1 día';
   return label+': datos de hace '+d+' días';
@@ -477,13 +477,13 @@ function updateDecoCompatibility(){
   DATA.decoCompatible=gap!==null && gap<=6;
 }
 function normalizeOpKey(v){ return String(v||'').trim().toLowerCase().replace(/\s+/g,''); }
-function operatorFromDeco(row){ return row ? String(row.CLI_DSC||row.OPERADOR||row.operador||'Operador no informado').trim() : 'Sin DECO'; }
+function operatorFromDeco(row){ return row ? String(row.CLI_DSC||row.OPERADOR||row.operador||'Operador no informado').trim() : 'Operador no informado'; }
 function routeOperator(route){
   if(!DATA.decoCompatible) return 'No disponible';
-  if(!route) return 'Sin DECO';
+  if(!route) return 'Operador no informado';
   var keys=[route.route_short_name, route.route_id].map(normalizeOpKey);
   for(var i=0;i<keys.length;i++){ if(DATA.decoByRoute[keys[i]]) return operatorFromDeco(DATA.decoByRoute[keys[i]][0]); }
-  return 'Sin DECO';
+  return 'Operador no informado';
 }
 function routeMatchesOperator(route, op){
   if(!DATA.decoCompatible) return true;
@@ -499,8 +499,8 @@ function fillOperatorSelect(selId, keepValue){
     sel.value='__all';
     sel.disabled=true;
     sel.title=DATA.availableSources.deco
-      ? 'GTFS y DECO tienen más de 6 días de diferencia o una fecha no detectable.'
-      : 'No hay un DECO vinculado para esta fecha.';
+      ? 'La información de operadores no corresponde a la fecha seleccionada.'
+      : 'No hay información de operadores para esta fecha.';
     return;
   }
   all.textContent='Todos los operadores'; sel.appendChild(all);
@@ -512,15 +512,15 @@ function fillOperatorSelect(selId, keepValue){
 function refreshDataAge(){
   var el=document.getElementById('data-age');
   var decoText=DATA.decoCompatible
-    ? ageText('DECO',DATA.sourceDates.deco)
-    : (DATA.availableSources.deco ? 'DECO: sin datos equivalentes' : 'DECO: no disponible');
-  if(el) el.textContent=ageText('GTFS',DATA.sourceDates.gtfs)+' · '+decoText;
+    ? ageText('Operadores',DATA.sourceDates.deco)
+    : (DATA.availableSources.deco ? 'Operadores: fecha distinta' : 'Operadores: no disponibles');
+  if(el) el.textContent=ageText('Horarios',DATA.sourceDates.gtfs)+' · '+decoText;
   var side=document.getElementById('sidebar-source-summary');
   if(side){
-    var gtfsDate=DATA.sourceDates.gtfs?formatDatasetDate(DATA.sourceDates.gtfs):'fecha no detectada';
-    var available=['GTFS'];
-    if(DATA.availableSources.deco) available.push('DECO');
-    if(DATA.availableSources.param) available.push('Parámetros');
+    var gtfsDate=DATA.sourceDates.gtfs?formatDatasetDate(DATA.sourceDates.gtfs):'fecha no disponible';
+    var available=['Recorridos'];
+    if(DATA.availableSources.deco) available.push('Operadores');
+    if(DATA.availableSources.param) available.push('Indicadores');
     side.innerHTML='<strong>'+esc(gtfsDate)+'</strong><br><span>'+esc(available.join(' · '))+'</span>';
   }
 }
@@ -542,6 +542,7 @@ function serviceLabel(sid){
 }
 function tripDir(t){ return String(t.direction_id==null||t.direction_id===''?0:t.direction_id); }
 function dirName(dir){ return String(dir)==='1'?'Regreso':'Ida'; }
+function busCountText(count){ count=Number(count)||0; return count+' '+(count===1?'bus':'buses'); }
 function getTripStartOffset(tripId){
   var st = DATA.stopTimes[tripId]||[];
   if(!st.length) return 0;
@@ -557,7 +558,7 @@ async function parseDECOFile(file){
   if(/\.zip$/i.test(file.name||'')){
     var zip=await JSZip.loadAsync(file);
     var names=Object.keys(zip.files).filter(function(n){return /\.csv$/i.test(n);});
-    if(!names.length) throw new Error('El ZIP DECO no contiene CSV.');
+    if(!names.length) throw new Error('El archivo de operadores no contiene datos válidos.');
     txt=await zip.file(names[0]).async('string');
   } else {
     txt=await file.text();
@@ -580,7 +581,7 @@ async function parseDECOFile(file){
 function parseGTFSInWorker(file){
   return new Promise(function(resolve, reject){
     if(!window.Worker){
-      reject(new Error('Este navegador no soporta Web Workers.'));
+      reject(new Error('Este navegador no puede procesar la información. Prueba con una versión reciente.'));
       return;
     }
     var worker = new Worker(new URL('assets/js/gtfs-worker.js', window.location.href));
@@ -596,13 +597,13 @@ function parseGTFSInWorker(file){
       if(msg.type==='error'){
         done=true;
         worker.terminate();
-        reject(new Error(msg.message||'No se pudo leer el GTFS.'));
+        reject(new Error(msg.message||'No se pudo leer la información de recorridos.'));
       }
     };
     worker.onerror=function(err){
       if(done) return;
       worker.terminate();
-      reject(new Error(err.message||'Error en el procesador GTFS.'));
+      reject(new Error(err.message||'No se pudo procesar la información de recorridos.'));
     };
     worker.postMessage({file:file});
   });
@@ -628,11 +629,11 @@ async function handleFile(file, decoFile, paramItem, mode){
   updateDecoCompatibility();
   try{
     if(decoFile){
-      prog(5,'Leyendo DECO…');
+      prog(5,'Cargando operadores…');
       try{
         await parseDECOFile(decoFile);
       }catch(decoErr){
-        console.warn('El DECO no pudo procesarse. Se continuará solo con GTFS.',decoErr);
+        console.warn('No se pudo procesar la información de operadores. Se continuará con los recorridos.',decoErr);
         DATA.decoRows=[];
         DATA.decoByRoute={};
         DATA.operators=[];
@@ -642,7 +643,7 @@ async function handleFile(file, decoFile, paramItem, mode){
         updateDecoCompatibility();
       }
     }
-    prog(8,'Procesando GTFS…');
+    prog(8,'Preparando recorridos y horarios…');
     var parsed=await parseGTFSInWorker(file);
     Object.keys(parsed).forEach(function(k){DATA[k]=parsed[k];});
     prog(100,'Datos listos');
@@ -660,8 +661,8 @@ async function handleFile(file, decoFile, paramItem, mode){
     },120);
   }catch(err){
     console.error(err);
-    prog(0,err.message||'No se pudo cargar el GTFS.');
-    alert(err.message||'No se pudo cargar el GTFS.');
+    prog(0,err.message||'No se pudo cargar la información.');
+    alert(err.message||'No se pudo cargar la información.');
   }
 }
 
@@ -670,7 +671,6 @@ function tabAvailability(){
   var params=!!(DATA.availableSources && DATA.availableSources.param);
   return {
     resumen:gtfs,
-    trafico:gtfs,
     buses:APP_MODE==='realtime' && !!(DATA.availableSources && DATA.availableSources.deco),
     ruta:gtfs,
     paradero:gtfs,
@@ -692,8 +692,8 @@ function configureAvailableTabs(){
     if(panel && !available[tab]) panel.style.display='none';
   });
   var preferred=APP_MODE==='realtime'
-    ? ['buses','ruta','resumen','trafico','paradero','simulacion','comparar','parametros']
-    : ['resumen','trafico','ruta','paradero','parametros','simulacion','comparar'];
+    ? ['buses','ruta','resumen','paradero','simulacion','comparar','parametros']
+    : ['resumen','ruta','paradero','parametros','simulacion','comparar'];
   var first=preferred.find(function(tab){return available[tab];});
   if(first) switchTab(first);
 }
@@ -793,7 +793,7 @@ function renderOverview(){
   var health=document.getElementById('overview-health');
   if(health){
     health.innerHTML=[
-      ['Paraderos con coordenadas',a.coordsPct],
+      ['Paraderos ubicados en el mapa',a.coordsPct],
       ['Viajes con trazado',a.shapePct],
       ['Viajes con horarios',a.stopTimesPct],
       ['Recorridos con ambos sentidos',a.bothDirsPct]
@@ -804,25 +804,12 @@ function renderOverview(){
 
   var sources=document.getElementById('overview-sources');
   if(sources){
-    var decoDetail=!DATA.availableSources.deco?'No vinculado a esta publicación':
-      (DATA.decoCompatible?'Compatible · '+(DATA.decoDateGapDays||0)+' días de diferencia':'Disponible, pero fuera del rango de 6 días');
+    var decoDetail=!DATA.availableSources.deco?'No disponible para esta fecha':
+      (DATA.decoCompatible?'Disponible':'Corresponde a otra fecha');
     sources.innerHTML=
-      sourceStatus('GTFS',true,DATA.sourceNames.gtfs||'Archivo cargado',false)+
-      sourceStatus('DECO',DATA.availableSources.deco,decoDetail,DATA.availableSources.deco&&!DATA.decoCompatible)+
-      sourceStatus('Parámetros',DATA.availableSources.param,DATA.availableSources.param?(DATA.sourceNames.param||'Consolidado vinculado'):'No vinculado a esta publicación',false);
-  }
-
-  var diagnostics=document.getElementById('overview-diagnostics');
-  if(diagnostics){
-    var avgOffer=a.activeRoutes?Math.round(a.estimatedDepartures/a.activeRoutes):0;
-    diagnostics.innerHTML=[
-      ['Día analizado',a.serviceLabel,'Se usa para comparar oferta entre recorridos.'],
-      ['Mediana de paradas',a.medianStops===null?'—':Math.round(a.medianStops),'Cantidad de paradas por viaje plantilla.'],
-      ['Oferta media',avgOffer.toLocaleString('es-CL'),'Salidas estimadas por recorrido activo.'],
-      ['Tipos de servicio',(DATA.serviceIds||[]).length,'Identificadores de calendario presentes.'],
-      ['Operadores',DATA.decoCompatible?DATA.operators.length:'No disponible','Solo se usa DECO cuando cumple la ventana de 6 días.'],
-      ['Conexiones internas',(DATA.pathways||[]).length.toLocaleString('es-CL'),'Registros disponibles en pathways.txt.']
-    ].map(function(item){return '<div class="diagnostic-item"><strong>'+esc(item[0])+' · '+esc(item[1])+'</strong><span>'+esc(item[2])+'</span></div>';}).join('');
+      sourceStatus('Recorridos y horarios',true,formatDatasetDate(DATA.sourceDates.gtfs),false)+
+      sourceStatus('Operadores y servicios',DATA.availableSources.deco,decoDetail,DATA.availableSources.deco&&!DATA.decoCompatible)+
+      sourceStatus('Indicadores',DATA.availableSources.param,DATA.availableSources.param?'Disponibles':'No disponibles para esta fecha',false);
   }
 
   var canvas=document.getElementById('overview-chart');
@@ -1007,7 +994,7 @@ function sheetPeriodFromName(name){
 }
 async function loadWorkbookMeta(fileObj){
   var res=await fetch(fileObj.download_url,{cache:'no-store'});
-  if(!res.ok) throw new Error('No se pudo descargar el consolidado ('+res.status+').');
+  if(!res.ok) throw new Error('No se pudieron descargar los indicadores ('+res.status+').');
   var blob=await res.blob();
   var zip=await JSZip.loadAsync(blob);
   var wbXml=await zip.file('xl/workbook.xml').async('string');
@@ -1039,7 +1026,7 @@ async function getSharedStrings(){
 async function parseParameterSheet(sheetName){
   if(PARAMS.cache[sheetName]) return PARAMS.cache[sheetName];
   var sheet=PARAMS.sheets.find(function(s){return s.name===sheetName;});
-  if(!sheet || !sheet.path) throw new Error('No se encontró la hoja seleccionada.');
+  if(!sheet || !sheet.path) throw new Error('No se encontró el indicador seleccionado.');
   var xml=await PARAMS.zip.file(sheet.path).async('string');
   var doc=new DOMParser().parseFromString(xml,'application/xml');
   var shared=await getSharedStrings();
@@ -1094,17 +1081,17 @@ function fillParamSheets(){
 async function loadSelectedParams(){
   syncParamSelects('tab');
   var sel=document.getElementById('param-file-select');
-  if(!sel || !sel.value){ alert('No hay consolidado seleccionado.'); return; }
+  if(!sel || !sel.value){ alert('No hay indicadores disponibles para esta fecha.'); return; }
   var fileObj={name:(sel.options[sel.selectedIndex].dataset.name || sel.options[sel.selectedIndex].textContent), download_url:sel.value};
-  PARAMS.loading=true; setParamStatus('Descargando consolidado de parámetros...');
+  PARAMS.loading=true; setParamStatus('Cargando indicadores…');
   try{
     await loadWorkbookMeta(fileObj);
     fillParamSheets();
-    setParamStatus('Consolidado cargado. Selecciona indicador/período o usa filtros.');
+    setParamStatus('Indicadores listos. Selecciona un período o usa los filtros.');
     await renderSelectedParamSheet();
   }catch(err){
     console.error(err);
-    setParamStatus('No se pudo cargar el consolidado: '+(err.message||err));
+    setParamStatus('No se pudieron cargar los indicadores: '+(err.message||err));
   }finally{
     PARAMS.loading=false;
   }
@@ -1113,13 +1100,13 @@ async function renderSelectedParamSheet(){
   if(!PARAMS.sheets.length) return;
   var sheetSel=document.getElementById('param-sheet-select');
   var sheetName=sheetSel && sheetSel.value ? sheetSel.value : PARAMS.sheets[0].name;
-  setParamStatus('Leyendo hoja seleccionada...');
+  setParamStatus('Preparando indicador…');
   var parsed=await parseParameterSheet(sheetName);
   PARAMS.activeSheet=sheetName; PARAMS.rows=parsed.rows; PARAMS.intervals=parsed.intervals; PARAMS.metric=parsed.metric;
   fillParamFilters(parsed);
   document.getElementById('param-panel').style.display='block';
   renderParamsTable();
-  setParamStatus('Parámetros listos: '+parsed.rows.length+' filas en '+parsed.sheet.name+'.');
+  setParamStatus('Indicadores listos: '+parsed.rows.length+' resultados en '+parsed.sheet.name+'.');
 }
 function fillParamSelect(id, values, allLabel){
   var sel=document.getElementById(id); if(!sel) return;
@@ -1164,26 +1151,26 @@ function renderParamsTable(){
   var min=nums.length?nums.reduce(function(a,b){return Math.min(a,b);},nums[0]):null;
   var max=nums.length?nums.reduce(function(a,b){return Math.max(a,b);},nums[0]):null;
   if(title) title.textContent=PARAMS.metric||PARAMS.activeSheet||'Detalle';
-  if(note) note.textContent='Se renderizan hasta '+maxRows+' filas. Los indicadores se calculan sobre todas las filas filtradas.';
+  if(note) note.textContent='Se muestran hasta '+maxRows+' resultados. Los indicadores consideran todos los registros encontrados.';
   if(summary){
     summary.innerHTML=
-      metricCard('Filas filtradas',rows.length.toLocaleString('es-CL'),'registros del consolidado')+
-      metricCard('Intervalos',intervals.length.toLocaleString('es-CL'),'columnas temporales')+
-      metricCard('Promedio',average===null?'—':average.toFixed(2),'valores numéricos')+
+      metricCard('Resultados',rows.length.toLocaleString('es-CL'),'registros encontrados')+
+      metricCard('Intervalos',intervals.length.toLocaleString('es-CL'),'períodos disponibles')+
+      metricCard('Promedio',average===null?'—':average.toFixed(2),'valores disponibles')+
       metricCard('Mediana',med===null?'—':med.toFixed(2),'valor central')+
       metricCard('Rango',min===null?'—':min.toFixed(2)+'–'+max.toFixed(2),'mínimo a máximo');
   }
   if(!rows.length){
-    wrap.innerHTML='<div class="no-data">No hay filas con los filtros actuales.</div>';
+    wrap.innerHTML='<div class="no-data">No hay resultados con los filtros actuales.</div>';
     return;
   }
-  var head='<tr><th class="sticky-col">Código usuario</th><th>Código TS</th><th>UN</th><th>Sentido</th><th>Tipo</th>'+
+  var head='<tr><th class="sticky-col">Recorrido</th><th>Código interno</th><th>Operador</th><th>Sentido</th><th>Tipo</th>'+
     intervals.map(function(it){return '<th>'+esc(it.day)+'<br><span class="param-cell-muted">'+esc(it.band)+' '+esc(it.start)+'–'+esc(it.end)+'</span></th>';}).join('')+'</tr>';
   var body=shown.map(function(r){
     return '<tr><td class="sticky-col"><b>'+esc(r.codigoUsuario)+'</b></td><td>'+esc(r.codigoTs)+'</td><td>'+esc(r.unidad)+'</td><td>'+esc(r.sentido)+'</td><td>'+esc(r.tipo)+'</td>'+
       r.values.map(function(v){return '<td>'+esc(v===''?'—':v)+'</td>';}).join('')+'</tr>';
   }).join('');
-  var more=rows.length>maxRows?'<div class="param-status">Hay '+(rows.length-maxRows)+' filas adicionales no renderizadas.</div>':'';
+  var more=rows.length>maxRows?'<div class="param-status">Hay '+(rows.length-maxRows)+' resultados adicionales.</div>':'';
   wrap.innerHTML='<div class="tbl-wrap"><table class="param-table"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'+more;
 }
 function syncParamRouteFromGTFS(){
@@ -1227,90 +1214,6 @@ function initMap(){
   L.control.zoom({position:'topright'}).addTo(leafMap);
 }
 
-function trafficTileUrl(key){
-  return 'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?tileSize=256&key='+encodeURIComponent(key);
-}
-function setTrafficStatus(title, detail, state){
-  var box=document.getElementById('traffic-status');
-  if(!box) return;
-  box.className='panel-status traffic-status'+(state?' is-'+state:'');
-  box.innerHTML='<strong>'+esc(title)+'</strong><span>'+esc(detail)+'</span>';
-}
-function startTrafficRefresh(){
-  stopTrafficRefresh();
-  if(CURRENT_MAP_MODE!=='trafico' || !trafficLayer || !trafficKey) return;
-  trafficRefreshTimer=setInterval(function(){
-    if(document.hidden || CURRENT_MAP_MODE!=='trafico') return;
-    refreshTrafficLayer(true);
-  },300000);
-}
-function stopTrafficRefresh(){
-  if(trafficRefreshTimer){
-    clearInterval(trafficRefreshTimer);
-    trafficRefreshTimer=null;
-  }
-}
-function attachTrafficLayer(){
-  if(!leafMap || !trafficLayer || CURRENT_MAP_MODE!=='trafico') return;
-  if(!leafMap.hasLayer(trafficLayer)) trafficLayer.addTo(leafMap);
-}
-function detachTrafficLayer(){
-  if(leafMap && trafficLayer && leafMap.hasLayer(trafficLayer)) leafMap.removeLayer(trafficLayer);
-}
-function enableTrafficLayer(){
-  var input=document.getElementById('traffic-api-key');
-  var key=String(input&&input.value||'').trim();
-  if(!key){
-    setTrafficStatus('Falta la clave API','Ingresa una clave válida para solicitar la capa de tránsito.','error');
-    if(input) input.focus();
-    return;
-  }
-  initMap();
-  trafficKey=key;
-  trafficHadError=false;
-  if(trafficLayer) detachTrafficLayer();
-  trafficLayer=L.tileLayer(trafficTileUrl(trafficKey),{
-    attribution:'Traffic flow &copy; TomTom',
-    opacity:0.78,
-    maxZoom:19,
-    updateWhenIdle:true,
-    keepBuffer:2
-  });
-  trafficLayer.on('tileerror',function(){
-    if(trafficHadError) return;
-    trafficHadError=true;
-    setTrafficStatus('No se pudo cargar el tránsito','Revisa la clave, su vigencia, el límite de uso y la conexión.','error');
-  });
-  trafficLayer.on('load',function(){
-    if(trafficHadError) return;
-    var stamp=new Intl.DateTimeFormat('es-CL',{hour:'2-digit',minute:'2-digit'}).format(new Date());
-    setTrafficStatus('Tránsito activo','Capa cargada a las '+stamp+'. Actualización automática cada 5 minutos.','ready');
-  });
-  attachTrafficLayer();
-  fitSantiago(leafMap);
-  setTrafficStatus('Cargando tránsito','Solicitando el flujo vial actual para el área visible…','loading');
-  startTrafficRefresh();
-}
-function refreshTrafficLayer(silent){
-  if(!trafficLayer || !trafficKey){
-    if(!silent) setTrafficStatus('Tránsito no activado','Ingresa una clave y presiona “Mostrar tránsito”.','error');
-    return;
-  }
-  trafficHadError=false;
-  trafficLayer.setUrl(trafficTileUrl(trafficKey));
-  attachTrafficLayer();
-  if(!silent) setTrafficStatus('Actualizando tránsito','Solicitando una versión reciente de la capa…','loading');
-}
-function disableTrafficLayer(){
-  stopTrafficRefresh();
-  detachTrafficLayer();
-  trafficLayer=null;
-  trafficKey='';
-  trafficHadError=false;
-  var input=document.getElementById('traffic-api-key');
-  if(input) input.value='';
-  setTrafficStatus('Tránsito desactivado','La clave fue eliminada de esta sesión.','');
-}
 function setMapDir(dir, skipRender){
   curMapDir = Number(dir);
   ['0','1','both'].forEach(function(d){ var el=document.getElementById('map-btn-'+d); if(el) el.classList.toggle('active', String(curMapDir)===(d==='both'?'-1':d)); });
@@ -1416,13 +1319,13 @@ function renderRouteInsights(){
   if(name) name.textContent=(route.route_short_name||route.route_id||routeId)+' · '+(route.route_long_name||'Sin nombre');
   if(meta){
     var operator=routeOperator(route);
-    meta.textContent=serviceLabel(serviceId)+' · '+(DATA.decoCompatible?operator:'Operador no disponible para esta publicación');
+    meta.textContent=serviceLabel(serviceId)+' · '+(DATA.decoCompatible?operator:'Operador no disponible para esta fecha');
   }
   var wrap=document.getElementById('route-kpis');
   if(wrap){
     wrap.innerHTML=
       metricCard('Salidas estimadas',departures.length.toLocaleString('es-CL'),'ambos sentidos')+
-      metricCard('Ventana operacional',first===null?'—':secsToTime(first)+'–'+secsToTime(last),'primera salida a última llegada')+
+      metricCard('Horario del servicio',first===null?'—':secsToTime(first)+'–'+secsToTime(last),'primera salida a última llegada')+
       metricCard('Duración mediana',durations.length?Math.round(medianNumber(durations))+' min':'—','viaje completo')+
       metricCard('Intervalo mediano',gap===null?'—':Math.round(gap)+' min','entre salidas consecutivas')+
       metricCard('Paradas únicas',stops.length.toLocaleString('es-CL'),'en el día seleccionado');
@@ -1625,7 +1528,7 @@ function renderStopMap(stopId){
     initStopMap();
     if(stopMarker){stopLeafMap.removeLayer(stopMarker);stopMarker=null;}
     fitSantiago(stopLeafMap);
-    L.popup().setLatLng([-33.45,-70.65]).setContent('Este paradero no tiene coordenadas válidas en stops.txt.').openOn(stopLeafMap);
+    L.popup().setLatLng([-33.45,-70.65]).setContent('Este paradero no tiene una ubicación válida.').openOn(stopLeafMap);
     return;
   }
   initStopMap();
@@ -1695,7 +1598,7 @@ function renderStop(stopId){
   var level=stop.level_id&&DATA.levels[stop.level_id]?DATA.levels[stop.level_id].level_name:'';
   var pathCount=(DATA.pathwaysByStop[stopId]||[]).length;
   var meta=esc(stopId)+(stop.stop_lat!==null?' &nbsp;·&nbsp; '+(+stop.stop_lat).toFixed(5)+', '+(+stop.stop_lon).toFixed(5):'')+
-    (level?' &nbsp;·&nbsp; '+esc(level):'')+(pathCount?' &nbsp;·&nbsp; '+pathCount+' conexiones internas':'');
+    (level?' &nbsp;·&nbsp; '+esc(level):'')+(pathCount?' &nbsp;·&nbsp; '+pathCount+' conexiones peatonales':'');
   document.getElementById('stop-header-info').innerHTML=
     '<div class="stop-pin">●</div><div><div class="stop-name-big">'+esc(name)+'</div><div class="stop-id-small">'+meta+'</div></div>';
 
@@ -2167,7 +2070,7 @@ function renderCompareAnalysis(){
   );
   var note=document.getElementById('compare-analysis-note');
   if(note){
-    note.textContent='Mostrando '+rows.length+' de '+cmp.modified.length+' recorridos modificados. El índice de impacto pondera paraderos, variación porcentual de viajes y frecuencia, cambios de días/sentidos y datos de ruta; sirve para priorizar revisión y no es un KPI oficial.';
+    note.textContent='Mostrando '+rows.length+' de '+cmp.modified.length+' recorridos modificados, según los filtros seleccionados.';
   }
 }
 
@@ -2182,20 +2085,20 @@ function renderCompare(cmp, oldFeed, newFeed){
   var improved=freqGroups.filter(function(g){return g.trend==='Mejora';}).length;
   var worsened=freqGroups.filter(function(g){return g.trend==='Empeora';}).length;
   document.getElementById('compare-summary').innerHTML=[
-    ['Rutas creadas',cmp.created.length],
-    ['Rutas eliminadas',cmp.deleted.length],
-    ['Rutas modificadas',cmp.modified.length],
-    ['Paraderos nuevos PA–PJ válidos',cmp.stopsCreated.length],
-    ['Paraderos eliminados PA–PJ válidos',cmp.stopsDeleted.length],
-    ['Rutas con cambios de frecuencia',freqGroups.length],
+    ['Recorridos creados',cmp.created.length],
+    ['Recorridos eliminados',cmp.deleted.length],
+    ['Recorridos modificados',cmp.modified.length],
+    ['Paraderos nuevos',cmp.stopsCreated.length],
+    ['Paraderos eliminados',cmp.stopsDeleted.length],
+    ['Recorridos con cambios de frecuencia',freqGroups.length],
     ['Frecuencia mejora',improved],
     ['Frecuencia empeora',worsened]
   ].map(function(x){return '<div class="stat-card"><div class="lbl">'+x[0]+'</div><div class="val">'+x[1]+'</div></div>';}).join('');
-  document.getElementById('routes-created-wrap').innerHTML=tableFromRows(['Ruta','Nombre','Viajes','Tipos de día','Frecuencia prom.'], cmp.created.map(function(k){
+  document.getElementById('routes-created-wrap').innerHTML=tableFromRows(['Recorrido','Nombre','Viajes','Tipos de día','Frecuencia prom.'], cmp.created.map(function(k){
     var r=newFeed.routesByShort[k], hw=avgHeadwayForRoute(newFeed,r);
     return '<tr><td><b>'+esc(displayRouteCode(r,k))+'</b></td><td>'+esc(routeLong(r))+'</td><td>'+routeTripsCount(newFeed,r)+'</td><td>'+routeServicesForFeed(newFeed,r).map(function(s){return serviceLabelForFeed(newFeed,s);}).join(', ')+'</td><td>'+(hw?hw+' min':'—')+'</td></tr>';
   }));
-  document.getElementById('routes-deleted-wrap').innerHTML=tableFromRows(['Ruta','Nombre','Viajes','Tipos de día','Frecuencia prom.'], cmp.deleted.map(function(k){
+  document.getElementById('routes-deleted-wrap').innerHTML=tableFromRows(['Recorrido','Nombre','Viajes','Tipos de día','Frecuencia prom.'], cmp.deleted.map(function(k){
     var r=oldFeed.routesByShort[k], hw=avgHeadwayForRoute(oldFeed,r);
     return '<tr><td><b>'+esc(displayRouteCode(r,k))+'</b></td><td>'+esc(routeLong(r))+'</td><td>'+routeTripsCount(oldFeed,r)+'</td><td>'+routeServicesForFeed(oldFeed,r).map(function(s){return serviceLabelForFeed(oldFeed,s);}).join(', ')+'</td><td>'+(hw?hw+' min':'—')+'</td></tr>';
   }));
@@ -2206,12 +2109,14 @@ function renderCompare(cmp, oldFeed, newFeed){
 }
 async function compareSelectedGTFS(){
   var baseSel=document.getElementById('compare-base-select'), targetSel=document.getElementById('compare-target-select');
-  if(!baseSel || !targetSel || !baseSel.value || !targetSel.value){ alert('Selecciona dos GTFS.'); return; }
+  if(!baseSel || !targetSel || !baseSel.value || !targetSel.value){ alert('Selecciona dos fechas.'); return; }
   var baseName=baseSel.options[baseSel.selectedIndex].dataset.name || baseSel.options[baseSel.selectedIndex].textContent;
   var targetName=targetSel.options[targetSel.selectedIndex].dataset.name || targetSel.options[targetSel.selectedIndex].textContent;
-  if(baseSel.value===targetSel.value){ alert('Selecciona dos GTFS distintos para comparar.'); return; }
+  if(baseSel.value===targetSel.value){ alert('Selecciona dos fechas distintas para comparar.'); return; }
   document.getElementById('compare-hint').style.display='block';
-  document.getElementById('compare-hint').textContent='Descargando y procesando '+baseName+' contra '+targetName+'...';
+  var baseLabel=baseSel.options[baseSel.selectedIndex].textContent;
+  var targetLabel=targetSel.options[targetSel.selectedIndex].textContent;
+  document.getElementById('compare-hint').textContent='Preparando comparación entre '+baseLabel+' y '+targetLabel+'…';
   document.getElementById('compare-results').style.display='none';
   try{
     var baseFile=await fetchGTFSFileFromURL(baseSel.value,baseName);
@@ -2219,11 +2124,11 @@ async function compareSelectedGTFS(){
     var oldFeed=await parseGTFSForCompare(baseFile);
     var newFeed=await parseGTFSForCompare(targetFile);
     var cmp=compareFeeds(oldFeed,newFeed);
-    document.getElementById('compare-hint').textContent='Comparación lista: '+baseName+' → '+targetName+'.';
+    document.getElementById('compare-hint').textContent='Comparación lista: '+baseLabel+' → '+targetLabel+'.';
     renderCompare(cmp, oldFeed, newFeed);
   }catch(err){
     console.error(err);
-    document.getElementById('compare-hint').textContent='No se pudo comparar. Revisa que los ZIP existan en /data y que GitHub Pages pueda descargarlos.';
+    document.getElementById('compare-hint').textContent='No se pudo comparar la información. Intenta nuevamente más tarde.';
   }
 }
 
@@ -2390,14 +2295,14 @@ function renderSimulation(){
   simVehicleLayer=vehicles.addTo(simMap);
   if(shapeChanged&&viewBounds.length) simMap.fitBounds(viewBounds,{padding:[28,28],maxZoom:15});
   var count=document.getElementById('sim-count');
-  if(count) count.textContent=active.length+' buses activos · '+minsToClock(simSelectedMinute);
+  if(count) count.textContent=busCountText(active.length)+' estimado'+(active.length===1?'':'s')+' · '+minsToClock(simSelectedMinute);
   renderSimulationActiveTable(active,route);
 }
 function renderSimulationActiveTable(active,route){
   var wrap=document.getElementById('sim-active-wrap');
   if(!wrap) return;
   if(!active.length){
-    wrap.innerHTML='<div class="no-data">No hay viajes activos para este recorrido a la hora seleccionada.</div>';
+    wrap.innerHTML='<div class="no-data">No hay buses estimados para este recorrido a la hora seleccionada.</div>';
     return;
   }
   var rows=active.sort(function(a,b){return a.departure-b.departure;}).map(function(d){
@@ -2516,7 +2421,7 @@ function buildBusDecoIndex(rows){
 async function ensureBusDeco(){
   if(BUS_STATE.decoReady) return;
   var rows=(DATA.decoRows||[]).slice();
-  if(!rows.length) throw new Error('No hay un DECO vigente cargado para el monitoreo.');
+  if(!rows.length) throw new Error('No hay información vigente de operadores para el monitoreo.');
   BUS_STATE.decoIndex=buildBusDecoIndex(rows);
   BUS_STATE.decoReady=true;
 }
@@ -2565,7 +2470,7 @@ function enrichBusFeature(feature){
     ? decoOperatorKey
     : (sourceOperatorKey||'sin-operador');
   var operatorName=busOperatorNameFromDeco(deco) || BUS_OPERATOR_NAMES[sourceOperatorKey] || 'Operador no informado';
-  var plate=String(properties.license_plate||'PPU no informada').trim().toUpperCase();
+  var plate=String(properties.license_plate||'Patente no informada').trim().toUpperCase();
   var timestamp=parseBusDate(properties.timestamp);
   var direction=busDirection(properties);
   return {
@@ -2649,14 +2554,14 @@ function fillBusOperatorOptions(){
     operators[bus.operatorKey].count++;
   });
 
-  select.innerHTML='<option value="__all">Todos los operadores ('+BUS_STATE.features.length+' buses)</option>';
+  select.innerHTML='<option value="__all">Todos los operadores ('+busCountText(BUS_STATE.features.length)+')</option>';
   Object.keys(operators).sort(function(a,b){
     return operators[a].name.localeCompare(operators[b].name,undefined,{numeric:true,sensitivity:'base'});
   }).forEach(function(key){
     var item=operators[key];
     var option=document.createElement('option');
     option.value=key;
-    option.textContent=operatorDisplayLabel(key,item.name)+' ('+(item.count?item.count+' buses':'sin buses actuales')+')';
+    option.textContent=operatorDisplayLabel(key,item.name)+' ('+(item.count?busCountText(item.count):'sin buses actuales')+')';
     select.appendChild(option);
   });
   if(Array.from(select.options).some(function(option){return option.value===keep;})) select.value=keep;
@@ -2687,13 +2592,13 @@ function updateBusRouteOptions(){
 
   BUS_STATE.catalogRoutes=Object.keys(routes).length;
   var liveTotal=Object.keys(routes).reduce(function(sum,key){return sum+routes[key].count;},0);
-  routeSelect.innerHTML='<option value="__all">Todos los recorridos ('+liveTotal+' buses · '+BUS_STATE.catalogRoutes+' códigos)</option>';
+  routeSelect.innerHTML='<option value="__all">Todos los recorridos ('+busCountText(liveTotal)+' · '+BUS_STATE.catalogRoutes+' códigos)</option>';
   Object.keys(routes).sort(function(a,b){
     return routes[a].label.localeCompare(routes[b].label,undefined,{numeric:true,sensitivity:'base'});
   }).forEach(function(key){
     var option=document.createElement('option');
     option.value=key;
-    option.textContent=routes[key].label+' ('+(routes[key].count?routes[key].count+' buses':'sin buses actuales')+')';
+    option.textContent=routes[key].label+' ('+(routes[key].count?busCountText(routes[key].count):'sin buses actuales')+')';
     routeSelect.appendChild(option);
   });
   if(Array.from(routeSelect.options).some(function(option){return option.value===keep;})) routeSelect.value=keep;
@@ -2731,9 +2636,9 @@ function busPopupHtml(bus){
   return '<div class="bus-popup">'+
     '<span class="bus-popup-kicker">Recorrido</span>'+
     '<strong class="bus-popup-route">'+esc(bus.publicRoute)+'</strong>'+
-    '<span class="bus-popup-code">Código TS/RED · '+esc(bus.rawRoute)+'</span>'+
+    '<span class="bus-popup-code">Código interno · '+esc(bus.rawRoute)+'</span>'+
     '<dl>'+
-      '<div><dt>PPU</dt><dd>'+esc(bus.plate)+'</dd></div>'+
+      '<div><dt>Patente</dt><dd>'+esc(bus.plate)+'</dd></div>'+
       '<div><dt>Operador</dt><dd>'+esc(operatorDisplayLabel(bus.operatorKey,bus.operatorName))+'</dd></div>'+
       '<div><dt>Sentido</dt><dd>'+esc(bus.directionLabel)+'</dd></div>'+
       '<div><dt>Velocidad</dt><dd>'+esc(speed)+'</dd></div>'+
@@ -2765,15 +2670,15 @@ function renderBusLayer(){
     busLayer.addLayer(marker);
   });
   busLayer.addTo(leafMap);
-  var suffix=BUS_STATE.sourceCount<2?' Una de las fuentes de posiciones no respondió.':'';
+  var suffix=BUS_STATE.sourceCount<2?' Parte de la información no está disponible.':'';
   setBusStatus(
     'Buses visibles: '+buses.length,
-    'Total consolidado: '+BUS_STATE.features.length+'. Códigos DECO disponibles: '+BUS_STATE.catalogRoutes+'. Actualizado: '+formatBusDate(BUS_STATE.lastLoadedAt)+'.'+suffix,
+    'Buses informados: '+BUS_STATE.features.length+'. Recorridos disponibles: '+BUS_STATE.catalogRoutes+'. Actualizado: '+formatBusDate(BUS_STATE.lastLoadedAt)+'.'+suffix,
     BUS_STATE.sourceCount<2?'warning':'ready',
     'Actualización cada 60 segundos solo mientras esta vista está activa.'
   );
   var label=document.getElementById('map-context-label');
-  if(label) label.textContent=buses.length+' buses visibles';
+  if(label) label.textContent=busCountText(buses.length)+' visible'+(buses.length===1?'':'s');
 }
 function renderRouteBusOverlay(){
   var status=document.getElementById('route-live-bus-status');
@@ -2817,7 +2722,7 @@ function renderRouteBusOverlay(){
   busLayer.addTo(leafMap);
   if(status){
     status.hidden=false;
-    status.innerHTML='<strong>'+buses.length+' buses actuales en el trazado</strong><span>Recorrido '+esc(routeLabel)+' · '+esc(direction==='I'?'Ida':(direction==='R'?'Regreso':'ambos sentidos'))+'.</span>';
+    status.innerHTML='<strong>'+busCountText(buses.length)+' actual'+(buses.length===1?'':'es')+' en el trazado</strong><span>Recorrido '+esc(routeLabel)+' · '+esc(direction==='I'?'Ida':(direction==='R'?'Regreso':'ambos sentidos'))+'.</span>';
   }
 }
 async function applyBusFeatureLists(featureLists, sourceCount, sourceErrors){
@@ -2840,7 +2745,7 @@ async function loadBusData(force){
   }
   BUS_STATE.loading=true;
   var token=++busRequestToken;
-  setBusStatus('Actualizando posiciones','Consultando las dos fuentes de buses…','loading');
+  setBusStatus('Actualizando posiciones','Consultando buses en circulación…','loading');
   try{
     await ensureBusDeco();
     var results=await Promise.allSettled(BUS_ENDPOINTS.map(fetchBusEndpoint));
@@ -2856,31 +2761,12 @@ async function loadBusData(force){
     console.error(error);
     setBusStatus(
       'No se pudieron cargar los buses',
-      'La fuente puede estar fuera de línea o bloquear solicitudes CORS. Usa “Cargar respaldo” con un JSON descargado desde la fuente.',
+      'No fue posible consultar las posiciones. Intenta actualizar nuevamente más tarde.',
       'error'
     );
   }finally{
     if(token===busRequestToken) BUS_STATE.loading=false;
     if(CURRENT_MAP_MODE==='buses') startBusRefresh();
-  }
-}
-function chooseBusJsonFile(){
-  var input=document.getElementById('bus-json-file');
-  if(input) input.click();
-}
-async function loadBusJsonFile(input){
-  var file=input&&input.files&&input.files[0];
-  if(!file) return;
-  setBusStatus('Leyendo respaldo','Procesando '+file.name+'…','loading');
-  try{
-    var text=await file.text();
-    var features=extractBusFeatures(text);
-    await applyBusFeatureLists([features],1,[]);
-  }catch(error){
-    console.error(error);
-    setBusStatus('Archivo no válido','El respaldo debe contener geojson.features o features.','error');
-  }finally{
-    input.value='';
   }
 }
 function startBusRefresh(){
@@ -2911,6 +2797,11 @@ document.addEventListener('visibilitychange',function(){
   else if(CURRENT_MAP_MODE==='buses') startBusRefresh();
 });
 
+
+
+/* Nombres públicos para acciones de la interfaz. */
+function syncParamRouteFromCurrent(){ return syncParamRouteFromGTFS(); }
+function compareSelectedDates(){ return compareSelectedGTFS(); }
 
 /* Navegación cartográfica */
 var CURRENT_MAP_MODE='resumen';
@@ -2963,26 +2854,21 @@ function mapContextLabel(tab){
   if(tab==='ruta'){
     var sel=document.getElementById('sel-route');
     var route=sel&&sel.value?DATA.routes[sel.value]:null;
-    return route?'Recorrido '+(route.route_short_name||route.route_id):'Trazado de recorrido';
+    return route?'Recorrido '+(route.route_short_name||route.route_id):'Trazado del recorrido';
   }
   if(tab==='paradero'){
     if(activeStop&&DATA.stops[activeStop]) return cleanName(DATA.stops[activeStop].stop_name||activeStop);
-    return 'Buscar ubicación';
+    return 'Buscar paradero';
   }
-  if(tab==='trafico') return 'Tránsito actual de Santiago';
-  if(tab==='buses') return BUS_STATE.visibleCount?BUS_STATE.visibleCount+' buses visibles':'Buses en operación';
-  if(tab==='simulacion') return 'Simulación GTFS';
-  if(tab==='comparar') return 'Comparación de publicaciones';
-  if(tab==='parametros') return 'Parámetros operacionales';
+  if(tab==='buses') return BUS_STATE.visibleCount?busCountText(BUS_STATE.visibleCount)+' visible'+(BUS_STATE.visibleCount===1?'':'s'):'Buses en circulación';
+  if(tab==='simulacion') return 'Buses estimados';
+  if(tab==='comparar') return 'Comparar fechas';
+  if(tab==='parametros') return 'Indicadores operacionales';
   return 'Santiago completo';
 }
 function setMapContext(tab){
   CURRENT_MAP_MODE=tab;
   document.body.setAttribute('data-map-mode',tab);
-  if(tab!=='trafico'){
-    detachTrafficLayer();
-    stopTrafficRefresh();
-  }
   if(tab!=='buses') stopBusRefresh();
   if(tab!=='buses' && tab!=='ruta') detachBusLayer();
   document.querySelectorAll('.geo-map').forEach(function(el){el.classList.remove('is-active');});
@@ -3016,10 +2902,6 @@ function setMapContext(tab){
       setTimeout(function(){leafMap.invalidateSize();fitRouteMap();},50);
     }else{
       clearRouteLayers();
-      if(tab==='trafico'){
-        attachTrafficLayer();
-        startTrafficRefresh();
-      }
       if(tab==='buses') openBusView();
       fitSantiago(leafMap);
       setTimeout(function(){leafMap.invalidateSize();},50);
@@ -3060,18 +2942,17 @@ function switchTab(tab){
   if(!available[tab]) return;
   var meta={
     resumen:['Cobertura metropolitana','Mapa de Santiago','Vista general'],
-    trafico:['Flujo vial en tiempo real','Tránsito actual de Santiago','Tránsito'],
-    buses:['Posición operacional','Buses en operación','Buses'],
-    ruta:['Geometría y operación','Trazado de recorrido','Trazado'],
-    paradero:['Puntos de detención','Ubicación de paradero','Ubicación'],
-    parametros:['Fuente complementaria','Parámetros operacionales','Parámetros'],
-    simulacion:['Representación temporal','Simulación GTFS','Simulación'],
-    comparar:['Evolución de publicaciones','Comparar GTFS','Comparación']
+    buses:['Ubicación actual','Buses en circulación','Buses'],
+    ruta:['Recorrido y paradas','Trazado del recorrido','Trazado'],
+    paradero:['Paraderos','Buscar paradero','Paraderos'],
+    parametros:['Información adicional','Indicadores operacionales','Indicadores'],
+    simulacion:['Estimación por horario','Buses estimados','Estimación'],
+    comparar:['Cambios en el tiempo','Comparar fechas','Comparación']
   };
   document.querySelectorAll('.tab-btn[data-tab]').forEach(function(button){
     button.classList.toggle('active',button.getAttribute('data-tab')===tab);
   });
-  ['resumen','trafico','buses','ruta','paradero','parametros','simulacion','comparar'].forEach(function(name){
+  ['resumen','buses','ruta','paradero','parametros','simulacion','comparar'].forEach(function(name){
     var panel=document.getElementById('tab-'+name);
     if(panel) panel.style.display=name===tab?'block':'none';
   });

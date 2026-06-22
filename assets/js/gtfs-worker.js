@@ -1,4 +1,4 @@
-/* v2.0.0 — procesador GTFS fuera del hilo principal */
+/* v2.2.3 public — procesador de recorridos fuera del hilo principal */
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js');
 
@@ -35,11 +35,11 @@ function getTripStartOffset(tripId){
 }
 async function parseGTFS(file){
   DATA = freshData();
-  postProgress(10, 'Descomprimiendo GTFS...');
+  postProgress(10, 'Preparando información…');
   var zip = await JSZip.loadAsync(file);
   var required = ['routes.txt','trips.txt','stops.txt','stop_times.txt'];
   var missing = required.filter(function(name){ return !zip.file(name); });
-  if(missing.length) throw new Error('Faltan archivos GTFS obligatorios: ' + missing.join(', '));
+  if(missing.length) throw new Error('Faltan archivos necesarios para leer la publicación.');
 
   async function readTxt(name){ var f=zip.file(name); return f?await f.async('string'):''; }
   function parse(txt){ return txt ? Papa.parse(txt.trim(),{header:true,skipEmptyLines:true,dynamicTyping:false}).data : []; }
