@@ -1,3 +1,13 @@
+
+var VEHICLE_REGISTRY={};
+async function loadVehicleRegistry(){
+ try{ VEHICLE_REGISTRY=await (await fetch('vehicle_registry.json')).json(); }catch(e){ VEHICLE_REGISTRY={};}
+}
+loadVehicleRegistry();
+function vehicleInfoByPlate(plate){
+ var k=String(plate||'').replace(/-/g,'').toUpperCase();
+ return VEHICLE_REGISTRY[k]||null;
+}
 /* v2.2.3 public — lógica principal del Mapa Operativo RED
    Separado desde el HTML para facilitar mantenimiento en GitHub Pages. */
 
@@ -2635,7 +2645,7 @@ function filteredBuses(){
     return true;
   });
 }
-function busPopupHtml(bus){
+function busPopupHtml(bus){ var vehicle=vehicleInfoByPlate(bus.plate)||{};
   var speed=bus.speed===null?'No informada':bus.speed.toLocaleString('es-CL',{maximumFractionDigits:1})+' km/h';
   return '<div class="bus-popup">'+
     '<span class="bus-popup-kicker">Recorrido</span>'+
@@ -2645,7 +2655,7 @@ function busPopupHtml(bus){
       '<div><dt>Patente</dt><dd>'+esc(bus.plate)+'</dd></div>'+
       '<div><dt>Operador</dt><dd>'+esc(operatorDisplayLabel(bus.operatorKey,bus.operatorName))+'</dd></div>'+
       '<div><dt>Sentido</dt><dd>'+esc(bus.directionLabel)+'</dd></div>'+
-      '<div><dt>Velocidad</dt><dd>'+esc(speed)+'</dd></div>'+
+      '<div><dt>Velocidad</dt><dd>'+esc(speed)+'</dd></div>'+'<div><dt>Tipo de bus</dt><dd>'+esc(vehicle.type||'No informado')+'</dd></div>'+'<div><dt>Tecnología / Combustible</dt><dd>'+esc(vehicle.tech||'No informado')+'</dd></div>'+
       '<div><dt>Último dato</dt><dd>'+esc(formatBusDate(bus.timestamp))+'</dd></div>'+
     '</dl>'+
   '</div>';
