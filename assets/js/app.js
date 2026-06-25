@@ -23,7 +23,7 @@ var GITHUB_DECO_FILES = [];
 var GITHUB_PARAM_FILES = [];
 var START_DATASET = null;
 var REALTIME_DATASET = null;
-var APP_MODE = 'static';
+var APP_MODE = 'realtime';
 var GITHUB_CATALOG_LIVE = false;
 var DATASET_MAX_GAP_DAYS = 6;
 function freshData(){
@@ -181,7 +181,7 @@ function launchAvailabilityCard(label,item){
   return '<div class="availability-item available"><span class="availability-label">'+esc(label)+'</span><strong>Disponible</strong><small>'+esc(formatDatasetDate(item.date))+'</small></div>';
 }
 function setLaunchMode(mode){
-  APP_MODE=mode==='realtime'?'realtime':'static';
+  APP_MODE='realtime';
   var staticButton=document.getElementById('launch-mode-static');
   var realtimeButton=document.getElementById('launch-mode-realtime');
   var staticOptions=document.getElementById('static-launch-options');
@@ -196,8 +196,7 @@ function setLaunchMode(mode){
   }
   if(staticOptions) staticOptions.hidden=APP_MODE!=='static';
   if(realtimeOptions) realtimeOptions.hidden=APP_MODE!=='realtime';
-  if(APP_MODE==='realtime') updateRealtimeAvailability();
-  else updateStartDatasetAvailability();
+  updateRealtimeAvailability();
 }
 function updateRealtimeAvailability(){
   var wrap=document.getElementById('realtime-dataset-availability');
@@ -231,10 +230,7 @@ function updateRealtimeAvailability(){
   note.className='dataset-link-note is-ready';
   if(APP_MODE==='realtime') btn.disabled=false;
 }
-function loadSelectedLaunchMode(){
-  if(APP_MODE==='realtime') loadLatestRealtime();
-  else loadSelectedMainGTFS();
-}
+function loadSelectedLaunchMode(){ loadLatestRealtime(); }
 function linkedDatasetForDate(targetDate){
   var targetKey=dateKey(targetDate);
   var gtfsExact=datedFiles(GITHUB_GTFS_FILES).filter(function(item){return item.key===targetKey;});
@@ -311,12 +307,12 @@ function updateStartDatasetAvailability(){
   START_DATASET=targetDate ? linkedDatasetForDate(targetDate) : null;
 
   if(!wrap || !note || !btn) return;
-  if(buttonLabel && APP_MODE==='static') buttonLabel.textContent='Abrir recorridos y horarios';
+  
   if(!START_DATASET || !START_DATASET.gtfs){
     wrap.innerHTML='<div class="availability-empty">No hay información disponible para esta fecha.</div>';
     note.textContent='No hay datos base disponibles para cargar.';
     note.className='dataset-link-note is-warning';
-    if(APP_MODE==='static') btn.disabled=true;
+    btn.disabled=true;
     return;
   }
 
@@ -335,7 +331,7 @@ function updateStartDatasetAvailability(){
     note.textContent='Hay información parcial. No se encontraron '+missing.join(' ni ')+'.';
     note.className='dataset-link-note is-warning';
   }
-  if(APP_MODE==='static') btn.disabled=false;
+  btn.disabled=false;
 }
 function fillGitHubSelects(){
   fillOneSelect('compare-base-select',GITHUB_GTFS_FILES,'Sin fechas disponibles',0);
@@ -414,7 +410,7 @@ async function loadLatestRealtime(){
     alert('No se pudo cargar la información más reciente. El monitoreo no mostrará datos antiguos.');
   }
 }
-document.addEventListener('DOMContentLoaded', initGitHubGTFSList);
+document.addEventListener('DOMContentLoaded', function(){ initGitHubGTFSList(); setLaunchMode('realtime'); });
 
 function prog(pct, txt){
   document.getElementById('prog-bar').style.display = 'block';
@@ -621,7 +617,7 @@ function parseGTFSInWorker(file){
 
 async function handleFile(file, decoFile, paramItem, mode){
   if(!file) return;
-  APP_MODE=mode==='realtime'?'realtime':'static';
+  APP_MODE='realtime';
   DATA = freshData();
   BUS_STATE.decoReady=false;
   BUS_STATE.decoIndex=null;
