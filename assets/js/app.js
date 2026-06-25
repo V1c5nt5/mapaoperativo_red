@@ -23,7 +23,7 @@ var GITHUB_DECO_FILES = [];
 var GITHUB_PARAM_FILES = [];
 var START_DATASET = null;
 var REALTIME_DATASET = null;
-var APP_MODE = 'realtime';
+var APP_MODE = 'static';
 var GITHUB_CATALOG_LIVE = false;
 var DATASET_MAX_GAP_DAYS = 6;
 function freshData(){
@@ -181,7 +181,7 @@ function launchAvailabilityCard(label,item){
   return '<div class="availability-item available"><span class="availability-label">'+esc(label)+'</span><strong>Disponible</strong><small>'+esc(formatDatasetDate(item.date))+'</small></div>';
 }
 function setLaunchMode(mode){
-  APP_MODE='realtime';
+  APP_MODE=mode==='realtime'?'realtime':'static';
   var staticButton=document.getElementById('launch-mode-static');
   var realtimeButton=document.getElementById('launch-mode-realtime');
   var staticOptions=document.getElementById('static-launch-options');
@@ -196,7 +196,8 @@ function setLaunchMode(mode){
   }
   if(staticOptions) staticOptions.hidden=APP_MODE!=='static';
   if(realtimeOptions) realtimeOptions.hidden=APP_MODE!=='realtime';
-  updateRealtimeAvailability();
+  if(APP_MODE==='realtime') updateRealtimeAvailability();
+  else updateStartDatasetAvailability();
 }
 function updateRealtimeAvailability(){
   var wrap=document.getElementById('realtime-dataset-availability');
@@ -230,7 +231,10 @@ function updateRealtimeAvailability(){
   note.className='dataset-link-note is-ready';
   if(APP_MODE==='realtime') btn.disabled=false;
 }
-function loadSelectedLaunchMode(){ loadLatestRealtime(); }
+function loadSelectedLaunchMode(){
+  if(APP_MODE==='realtime') loadLatestRealtime();
+  else loadSelectedMainGTFS();
+}
 function linkedDatasetForDate(targetDate){
   var targetKey=dateKey(targetDate);
   var gtfsExact=datedFiles(GITHUB_GTFS_FILES).filter(function(item){return item.key===targetKey;});
@@ -307,12 +311,12 @@ function updateStartDatasetAvailability(){
   START_DATASET=targetDate ? linkedDatasetForDate(targetDate) : null;
 
   if(!wrap || !note || !btn) return;
-  
+  if(buttonLabel && APP_MODE==='static') buttonLabel.textContent='Abrir recorridos y horarios';
   if(!START_DATASET || !START_DATASET.gtfs){
     wrap.innerHTML='<div class="availability-empty">No hay información disponible para esta fecha.</div>';
     note.textContent='No hay datos base disponibles para cargar.';
     note.className='dataset-link-note is-warning';
-    btn.disabled=true;
+    if(APP_MODE==='static') btn.disabled=true;
     return;
   }
 
@@ -331,7 +335,7 @@ function updateStartDatasetAvailability(){
     note.textContent='Hay información parcial. No se encontraron '+missing.join(' ni ')+'.';
     note.className='dataset-link-note is-warning';
   }
-  btn.disabled=false;
+  if(APP_MODE==='static') btn.disabled=false;
 }
 function fillGitHubSelects(){
   fillOneSelect('compare-base-select',GITHUB_GTFS_FILES,'Sin fechas disponibles',0);
@@ -410,7 +414,7 @@ async function loadLatestRealtime(){
     alert('No se pudo cargar la información más reciente. El monitoreo no mostrará datos antiguos.');
   }
 }
-document.addEventListener('DOMContentLoaded', function(){ initGitHubGTFSList(); setLaunchMode('realtime'); });
+document.addEventListener('DOMContentLoaded', initGitHubGTFSList);
 
 function prog(pct, txt){
   document.getElementById('prog-bar').style.display = 'block';
@@ -617,7 +621,7 @@ function parseGTFSInWorker(file){
 
 async function handleFile(file, decoFile, paramItem, mode){
   if(!file) return;
-  APP_MODE='realtime';
+  APP_MODE=mode==='realtime'?'realtime':'static';
   DATA = freshData();
   BUS_STATE.decoReady=false;
   BUS_STATE.decoIndex=null;
@@ -2482,49 +2486,38 @@ function enrichBusFeature(feature){
   var longitude=Number(coordinates[0]), latitude=Number(coordinates[1]);
   if(!isFinite(longitude)||!isFinite(latitude)) return null;
   if(latitude<-35 || latitude>-32 || longitude<-72 || longitude>-69) return null;
-
   var properties=feature.properties||{};
   var rawRoute=String(properties.route_code||'').trim();
-  
-  var deco = findBusDeco(rawRoute);
-  
-  // === LÓGICA MEJORADA PARA CÓDIGOS INTERNOS ===
-  var internalMatch = rawRoute.match(/(T[^,;|]+)/i);
-  var internalCode = deco && deco.CODIGO_RUTA 
-    ? String(deco.CODIGO_RUTA).trim().toUpperCase() 
-    : (internalMatch ? internalMatch[1].trim().toUpperCase() : (rawRoute || 'SIN-CODIGO'));
-
-  var publicRoute;
-  if(deco && deco.CODIGO_USUARIO && String(deco.CODIGO_USUARIO).trim()) {
-    publicRoute = String(deco.CODIGO_USUARIO).trim();
-  } else {
-    // Si no tiene DECO → usar el código interno completo
-    publicRoute = internalCode || rawRoute || 'SIN RECORRIDO';
-  }
-
-  var plate = String(properties.license_plate || 'Patente no informada').trim().toUpperCase();
-  var sourceOperatorKey = String(properties.operator === undefined || properties.operator === null ? '' : properties.operator).trim();
-  var decoOperatorKey = deco ? busOperatorKeyFromDeco(deco) : '';
-  var operatorKey = decoOperatorKey && decoOperatorKey !== 'sin-operador' ? decoOperatorKey : (sourceOperatorKey || 'sin-operador');
-  var operatorName = busOperatorNameFromDeco(deco) || BUS_OPERATOR_NAMES[sourceOperatorKey] || 'Operador no informado';
-
-  var direction = busDirection(properties);
-
+  var deco=findBusDeco(rawRoute);
+  var fallbackRoute=internalCode||plate||rawRoute||'Servicio no identificado';
+  var publicRoute=String(deco&&deco.CODIGO_USUARIO||fallbackRoute).trim()||fallbackRoute;
+  var sourceOperatorKey=String(properties.operator===undefined||properties.operator===null?'':properties.operator).trim();
+  var decoOperatorKey=deco?busOperatorKeyFromDeco(deco):'';
+  var operatorKey=decoOperatorKey && decoOperatorKey!=='sin-operador'
+    ? decoOperatorKey
+    : (sourceOperatorKey||'sin-operador');
+  var operatorName=busOperatorNameFromDeco(deco) || BUS_OPERATOR_NAMES[sourceOperatorKey] || 'Operador no informado';
+  var plate=String(properties.license_plate||'Patente no informada').trim().toUpperCase();
+  var internalMatch=rawRoute.match(/(T[^,;|]+)/i);
+  var internalCode=String(deco&&deco.CODIGO_RUTA||'').trim().toUpperCase();
+  if(!internalCode) internalCode=internalMatch?internalMatch[1].trim().toUpperCase():(rawRoute||'Código no informado');
+  var timestamp=parseBusDate(properties.timestamp);
+  var direction=busDirection(properties);
   return {
-    latitude: latitude,
-    longitude: longitude,
-    plate: plate,
-    rawRoute: internalCode,
-    internalCode: internalCode,
-    publicRoute: publicRoute,           // ← Esto es lo que se muestra en el filtro
-    routeKey: normalizeBusKey(publicRoute),
-    direction: direction,
-    directionLabel: direction==='I'?'Ida':(direction==='R'?'Regreso':'Sin sentido'),
-    operatorKey: operatorKey || 'sin-operador',
-    operatorName: operatorName,
-    speed: isFinite(Number(properties.speed)) ? Number(properties.speed) : null,
-    timestamp: parseBusDate(properties.timestamp),
-    timestampRaw: properties.timestamp || ''
+    latitude:latitude,
+    longitude:longitude,
+    plate:plate,
+    rawRoute:internalCode,
+    internalCode:internalCode,
+    publicRoute:publicRoute,
+    routeKey:normalizeBusKey(publicRoute),
+    direction:direction,
+    directionLabel:direction==='I'?'Ida':(direction==='R'?'Regreso':'Sin sentido'),
+    operatorKey:operatorKey||'sin-operador',
+    operatorName:operatorName,
+    speed:isFinite(Number(properties.speed))?Number(properties.speed):null,
+    timestamp:timestamp,
+    timestampRaw:properties.timestamp||''
   };
 }
 function extractBusFeatures(payload){
@@ -2933,105 +2926,6 @@ function setMapContext(tab){
   var label=document.getElementById('map-context-label');
   if(label) label.textContent=mapContextLabel(tab);
 }
-function resetCurrentMapView(){
-  if(CURRENT_MAP_MODE==='ruta'){
-    fitRouteMap();
-    return;
-  }
-  if(CURRENT_MAP_MODE==='paradero'){
-    if(activeStop) renderStopMap(activeStop);
-    else if(stopLeafMap) fitSantiago(stopLeafMap);
-    return;
-  }
-  if(CURRENT_MAP_MODE==='simulacion'){
-    if(simMap){
-      simShapeKey='';
-      renderSimulation();
-      if(!simShapeLayer) fitSantiago(simMap);
-    }
-    return;
-  }
-  if(leafMap) fitSantiago(leafMap);
-}
-document.addEventListener('keydown',function(e){
-  if(e.key==='Escape'){
-    toggleDetailsSheet(false);
-    toggleContextPanel(true);
-  }
-});
-
-function switchTab(tab){
-  var available=tabAvailability();
-  if(!available[tab]) return;
-  var meta={
-    resumen:['Cobertura metropolitana','Mapa de Santiago','Vista general'],
-    buses:['Ubicación actual','Buses en circulación','Buses'],
-    ruta:['Recorrido y paradas','Trazado del recorrido','Trazado'],
-    paradero:['Paraderos','Buscar paradero','Paraderos'],
-    parametros:['Información adicional','Indicadores operacionales','Indicadores'],
-    simulacion:['Estimación por horario','Buses estimados','Estimación'],
-    comparar:['Cambios en el tiempo','Comparar fechas','Comparación']
-  };
-  document.querySelectorAll('.tab-btn[data-tab]').forEach(function(button){
-    button.classList.toggle('active',button.getAttribute('data-tab')===tab);
-  });
-  ['resumen','buses','ruta','paradero','parametros','simulacion','comparar'].forEach(function(name){
-    var panel=document.getElementById('tab-'+name);
-    if(panel) panel.style.display=name===tab?'block':'none';
-  });
-  var title=document.getElementById('page-title');
-  var eyebrow=document.getElementById('page-eyebrow');
-  var panelTitle=document.getElementById('context-panel-title');
-  if(title) title.textContent=(meta[tab]||['',tab,''])[1];
-  if(eyebrow) eyebrow.textContent=(meta[tab]||['','',''])[0];
-  if(panelTitle) panelTitle.textContent=(meta[tab]||['','',tab])[2];
-  document.title=(meta[tab]?meta[tab][1]:'Mapa Operativo RED')+' — Mapa Operativo RED';
-
-  if(tab!=='simulacion') stopSimAuto();
-  setMapContext(tab);
-
-  if(tab==='resumen'){
-    renderOverview();
-    if(overviewChart) setTimeout(function(){overviewChart.resize();},80);
-  }
-  if(tab==='parametros') ensureParamsLoaded();
-  if(tab==='simulacion') setTimeout(function(){syncSimulationFromRoute();renderSimulation();},70);
-}
-
-  if(tab==='paradero'){
-    target=stopMapEl;
-    if(target) target.classList.add('is-active');
-    initStopMap();
-    if(!activeStop) fitSantiago(stopLeafMap);
-    setTimeout(function(){stopLeafMap.invalidateSize();if(activeStop)renderStopMap(activeStop);},50);
-  }else if(tab==='simulacion'){
-    target=simMapEl;
-    if(target) target.classList.add('is-active');
-    initSimulationMap();
-    setTimeout(function(){simMap.invalidateSize();renderSimulation();},50);
-  }else{
-    target=routeMap;
-    if(target) target.classList.add('is-active');
-    if(!leafMap) initMap();
-    if(tab==='ruta'){
-      detachBusLayer();
-      renderMap();
-      if(APP_MODE==='realtime'){
-        if(BUS_STATE.features.length) renderRouteBusOverlay();
-        else loadBusData(false);
-      }
-      setTimeout(function(){leafMap.invalidateSize();fitRouteMap();},50);
-    }else{
-      clearRouteLayers();
-      if(tab==='buses') openBusView();
-      fitSantiago(leafMap);
-      setTimeout(function(){leafMap.invalidateSize();},50);
-    }
-  }
-  var label=document.getElementById('map-context-label');
-  if(label) label.textContent=mapContextLabel(tab);
-}
-);
 function resetCurrentMapView(){
   if(CURRENT_MAP_MODE==='ruta'){
     fitRouteMap();
