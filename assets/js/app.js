@@ -2662,8 +2662,10 @@ function filteredBuses(){
     return true;
   });
 }
-function busPopupHtml(bus){ var vehicle=vehicleInfoByPlate(bus.plate)||{};
+function busPopupHtml(bus){ 
+  var vehicle=vehicleInfoByPlate(bus.plate)||{};
   var speed=bus.speed===null?'No informada':bus.speed.toLocaleString('es-CL',{maximumFractionDigits:1})+' km/h';
+  
   return '<div class="bus-popup">'+
     '<span class="bus-popup-kicker">Recorrido</span>'+
     '<strong class="bus-popup-route">'+esc(bus.publicRoute)+'</strong>'+
@@ -2672,7 +2674,11 @@ function busPopupHtml(bus){ var vehicle=vehicleInfoByPlate(bus.plate)||{};
       '<div><dt>Patente</dt><dd>'+esc(bus.plate)+'</dd></div>'+
       '<div><dt>Operador</dt><dd>'+esc(operatorDisplayLabel(bus.operatorKey,bus.operatorName))+'</dd></div>'+
       '<div><dt>Sentido</dt><dd>'+esc(bus.directionLabel)+'</dd></div>'+
-      '<div><dt>Velocidad</dt><dd>'+esc(speed)+'</dd></div>'+'<div><dt>Tipo de bus</dt><dd>'+esc(vehicle.type||'No informado')+'</dd></div>'+'<div><dt>Tecnología / Combustible</dt><dd>'+esc(vehicle.tech||'No informado')+'</dd></div>'+
+      '<div><dt>Velocidad</dt><dd>'+esc(speed)+'</dd></div>'+
+      '<div><dt>Tipo de bus</dt><dd>'+esc(vehicle.type||'No informado')+'</dd></div>'+
+      '<div><dt>Modelo</dt><dd>'+esc(vehicle.model||'No informado')+'</dd></div>'+ // <- NUEVA LÍNEA
+      '<div><dt>Año</dt><dd>'+esc(vehicle.year||'No informado')+'</dd></div>'+     // <- NUEVA LÍNEA
+      '<div><dt>Tecnología / Combustible</dt><dd>'+esc(vehicle.tech||'No informado')+'</dd></div>'+
       '<div><dt>Último dato</dt><dd>'+esc(formatBusDate(bus.timestamp))+'</dd></div>'+
     '</dl>'+
   '</div>';
