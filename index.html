@@ -203,7 +203,7 @@
             </div>
             <div id="monitor-status" class="panel-status bus-status monitor-status-card" aria-live="polite">
               <strong>Esperando información</strong>
-              <span>Se actualizará cuando se carguen los buses en circulación.</span>
+              <span>Se actualizará cada 1 minuto con la flota viva y el GTFS del día.</span>
             </div>
           </div>
 
@@ -223,7 +223,7 @@
               <div class="card-head">
                 <div>
                   <span class="card-kicker">Tipo de flota</span>
-                  <h3>B1, B2, B2P, C2 y más</h3>
+                  <h3>A, B, C y D</h3>
                 </div>
               </div>
               <div class="chart-wrap monitor-chart-wrap"><canvas id="monitor-type-chart"></canvas></div>
@@ -233,10 +233,20 @@
                 <div>
                   <span class="card-kicker">Flota operativa</span>
                   <h3>Flota operativa de buses circulando (por hora)</h3>
-                  <p>La línea roja muestra cuántos buses deberían estar según el GTFS del día. La línea azul muestra cuántos hay visibles ahora, con actualización cada 1 minuto.</p>
+                  <p>La línea roja muestra cuántos buses deberían estar según el GTFS del día actual. La línea azul muestra cuántos buses hay visibles ahora como referencia operativa, con actualización cada 1 minuto.</p>
                 </div>
               </div>
               <div class="chart-wrap monitor-demand-wrap"><canvas id="monitor-demand-chart"></canvas></div>
+            </article>
+            <article class="sheet-card span-2">
+              <div class="card-head">
+                <div>
+                  <span class="card-kicker">Identificación de flota</span>
+                  <h3>Patentes sin tipo claro o sin categoría A/B/C/D</h3>
+                  <p>Este bloque lista los buses que no tienen tipo definido, o cuya clasificación no calza con la segmentación operativa A, B, C y D.</p>
+                </div>
+              </div>
+              <div id="monitor-type-detail-list" class="monitor-list"></div>
             </article>
           </div>
 

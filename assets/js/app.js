@@ -871,8 +871,16 @@ function busTechBucket(vehicle){
 function busTypeBucket(vehicle){
   var raw=normalizeBusKey(vehicle&&vehicle.type||'');
   if(!raw) return 'Sin dato';
-  if(/^(A1|A2|B1|B2|B2P|C2|D)$/.test(raw)) return raw;
-  return String(vehicle.type||raw).trim();
+  if(/^(A1|A2|A)$/.test(raw)) return 'A';
+  if(/^(B1|B2|B2P|B)$/.test(raw)) return 'B';
+  if(/^(C2|C)$/.test(raw)) return 'C';
+  if(/^(D)$/.test(raw)) return 'D';
+  return 'Sin clasificar';
+}
+function busTypeExactLabel(vehicle){
+  var raw=String(vehicle&&vehicle.type||'').trim();
+  if(!raw) return 'Sin dato';
+  return raw;
 }
 function currentDateKey(date){
   var d=date instanceof Date ? date : new Date(date);
@@ -963,17 +971,32 @@ function activeBusTripsForToday(serviceIds){
     return isBusRoute(DATA.routes[trip.route_id]);
   });
 }
+function tripInstancesForDay(trip){
+  var se=tripStartEndSafe(trip&&trip.trip_id);
+  if(!trip || !se) return [];
+  var duration=Math.max(0, se.arrival-se.departure);
+  var freqs=(DATA.frequenciesByTrip && DATA.frequenciesByTrip[trip.trip_id]) || [];
+  if(!freqs.length) return [{start:se.departure, end:se.arrival}];
+  var instances=[];
+  freqs.forEach(function(f){
+    var start=timeToSecs(f.start_time), end=timeToSecs(f.end_time), step=csvNum(f.headway_secs,0);
+    if(step<=0 || end<=start) return;
+    for(var t=start; t<end; t+=step){
+      instances.push({start:t, end:t+duration});
+    }
+  });
+  return instances.length ? instances : [{start:se.departure, end:se.arrival}];
+}
 function buildHourlyDemand(trips){
   var hourly=Array(24).fill(0);
   (trips||[]).forEach(function(trip){
-    var se=tripStartEndSafe(trip.trip_id);
-    if(!se) return;
-    var inst=Math.max(1, estimatedTripInstances(trip)||1);
-    for(var hour=0; hour<24; hour++){
-      var start=hour*3600;
-      var end=start+3600;
-      if(se.departure < end && se.arrival >= start) hourly[hour]+=inst;
-    }
+    tripInstancesForDay(trip).forEach(function(inst){
+      for(var hour=0; hour<24; hour++){
+        var start=hour*3600;
+        var end=start+3600;
+        if(inst.start < end && inst.end > start) hourly[hour]+=1;
+      }
+    });
   });
   return hourly;
 }
@@ -1069,12 +1092,15 @@ function buildMonitoringSummary(){
   var vehicles=buses.map(function(bus){ return {bus:bus, info:vehicleInfoByPlate(bus.plate)||{}}; });
   var techs={}, types={}, operators={}, statuses={};
   var recentCount=0, recognizedCount=0, unknownPlateCount=0, validPlateCount=0, busRouteCount=0;
+  var unknownTypeSamples=[], unknownTechSamples=[], typeDetailCounts={};
   vehicles.forEach(function(item){
     var bus=item.bus, info=item.info||{};
     var tech=busTechBucket(info);
     var type=busTypeBucket(info);
+    var exactType=busTypeExactLabel(info);
     techs[tech]=(techs[tech]||0)+1;
     types[type]=(types[type]||0)+1;
+    typeDetailCounts[exactType]=(typeDetailCounts[exactType]||0)+1;
     operators[bus.operatorName||'Operador no informado']=(operators[bus.operatorName||'Operador no informado']||0)+1;
     var valid=busValidationStatus(bus);
     statuses[valid]=(statuses[valid]||0)+1;
@@ -1084,6 +1110,12 @@ function buildMonitoringSummary(){
     if(bus.timestamp && (Date.now()-bus.timestamp.getTime())<=20*60*1000) recentCount++;
     var r=DATA.routes && DATA.routes[bus.routeKey];
     if(r && isBusRoute(r)) busRouteCount++;
+    if(type==='Sin dato' || type==='Sin clasificar'){
+      if(unknownTypeSamples.length<12) unknownTypeSamples.push({plate:bus.plate||'Sin patente', route:bus.publicRoute||bus.routeKey||'Sin recorrido', type:exactType||'Sin dato'});
+    }
+    if(!tech || tech==='Sin dato'){
+      if(unknownTechSamples.length<12) unknownTechSamples.push({plate:bus.plate||'Sin patente', route:bus.publicRoute||bus.routeKey||'Sin recorrido', tech:exactType||'Sin dato'});
+    }
   });
 
   var now=new Date();
@@ -1128,12 +1160,17 @@ function buildMonitoringSummary(){
   var byOperator=arrayTopCounts(operators).slice(0,5);
   var busRoutesActive=unique(trips.map(function(t){ return t.route_id; })).length;
   var tripsWithIssues=trips.length-gtfsTripsWithTimes;
+  var groupedTypeRows=arrayTopCounts(types);
+  var groupedTechRows=arrayTopCounts(techs);
   if(!serviceIds.length) alerts.push({label:'Sin servicio activo para hoy', value:'Revisa la fecha del feed GTFS o la configuración del calendario.'});
   alerts.push({label:'Cobertura GTFS', value:qualityScore+'%', detail:'Promedio entre coincidencia de catálogo, señal reciente, patente y horarios completos.'});
   alerts.push({label:'Recorridos de buses activos', value:busRoutesActive.toLocaleString('es-CL')+' rutas', detail:'Se excluyen líneas de metro como L1, L2, L3, L4, L4A, L5 y L6.'});
   alerts.push({label:'Patentes válidas', value:platePct+'%', detail:validPlateCount.toLocaleString('es-CL')+' unidades con patente informada.'});
   alerts.push({label:'Señal reciente', value:recentPct+'%', detail:recentCount.toLocaleString('es-CL')+' buses con actualización en los últimos 20 minutos.'});
   alerts.push({label:'Buses sin catálogo', value:noCatalogCount.toLocaleString('es-CL')+' unidades', detail:'Quedan fuera de los recorridos reconocidos, aunque siguen siendo visibles.'});
+  alerts.push({label:'Buses requeridos ahora', value:demandNow.toLocaleString('es-CL'), detail:'Según la programación GTFS de la hora actual.'});
+  alerts.push({label:'Buses visibles ahora', value:totalBuses.toLocaleString('es-CL'), detail:'Flota observada en transmisión viva.'});
+  alerts.push({label:'Cobertura operacional', value:coverageNow.toLocaleString('es-CL')+'%', detail:'Relación entre visibles y requeridos a esta hora.'});
   if(staleCount>0) alerts.push({label:'Buses con señal antigua', value:staleCount.toLocaleString('es-CL')+' unidades', detail:'Sirve para detectar cortes de transmisión.'});
   if(tripsWithIssues>0) alerts.push({label:'Viajes sin horario completo', value:tripsWithIssues.toLocaleString('es-CL')+' viajes', detail:'El GTFS publicado no trae salida y llegada completas en varios recorridos.'});
   if(byOperator.length){
@@ -1142,8 +1179,9 @@ function buildMonitoringSummary(){
 
   return {
     buses:buses,
-    techs:arrayTopCounts(techs),
-    types:arrayTopCounts(types),
+    techs:groupedTechRows,
+    types:groupedTypeRows,
+    typeDetailCounts:arrayTopCounts(typeDetailCounts),
     statuses:statuses,
     recognizedCount:recognizedCount,
     recentCount:recentCount,
@@ -1168,7 +1206,9 @@ function buildMonitoringSummary(){
     busRouteCount:busRouteCount,
     byOperator:byOperator,
     routeCatalog:routeCatalog,
-    noCatalogCount:noCatalogCount
+    noCatalogCount:noCatalogCount,
+    unknownTypeSamples:unknownTypeSamples,
+    unknownTechSamples:unknownTechSamples
   };
 }
 function renderMonitoring(){
@@ -1176,7 +1216,8 @@ function renderMonitoring(){
   updateMonitorClock();
   var status=document.getElementById('monitor-status');
   if(status){
-    status.innerHTML='<strong>'+busCountText(data.buses.length)+' visibles ahora</strong><span>'+esc((data.demandNow||0).toLocaleString('es-CL'))+' buses deberían estar ahora · '+esc(data.plannedDepartures.toLocaleString('es-CL'))+' buses planificados hoy · '+esc(data.qualityScore+'% de cumplimiento GTFS')+'</span>';
+    var dayLabel=new Intl.DateTimeFormat('es-CL',{timeZone:'America/Santiago',weekday:'long'}).format(data.now);
+    status.innerHTML='<strong>'+busCountText(data.buses.length)+' visibles ahora</strong><span>'+esc((data.demandNow||0).toLocaleString('es-CL'))+' buses deberían estar ahora · '+esc(data.plannedDepartures.toLocaleString('es-CL'))+' buses planificados hoy · '+esc(data.qualityScore+'% de cumplimiento GTFS')+' · '+esc(dayLabel)+'</span>';
   }
   var stats=document.getElementById('monitor-stats');
   if(stats){
@@ -1184,8 +1225,8 @@ function renderMonitoring(){
       ['Buses actuales', data.buses.length.toLocaleString('es-CL'), 'en circulación ahora'],
       ['Buses que deberían estar', data.demandNow.toLocaleString('es-CL'), 'según GTFS a esta hora'],
       ['Flota planificada hoy', data.plannedDepartures.toLocaleString('es-CL'), 'según GTFS del día'],
+      ['Cobertura operacional', data.coverageNow.toLocaleString('es-CL')+'%', 'visibles vs requeridos'],
       ['Validación catálogo', data.routeValidationPct.toLocaleString('es-CL')+'%', 'coincidencia con recorrido'],
-      ['Señal reciente', data.recentPct.toLocaleString('es-CL')+'%', 'últimos 20 minutos'],
       ['Cumplimiento GTFS', data.qualityScore.toLocaleString('es-CL')+'%', 'índice operativo general']
     ].map(function(x){ return '<div class="stat-card"><div class="lbl">'+esc(x[0])+'</div><div class="val">'+esc(x[1])+'</div><div class="sub">'+esc(x[2])+'</div></div>'; }).join('');
   }
@@ -1196,7 +1237,7 @@ function renderMonitoring(){
   }
   var typeCanvas=document.getElementById('monitor-type-chart');
   if(typeCanvas){
-    monitorTypeChart=drawMonitorDoughnut(typeCanvas, monitorTypeChart, data.types.map(function(x){return x.label;}), data.types.map(function(x){return x.value;}), 'Tipo');
+    monitorTypeChart=drawMonitorDoughnut(typeCanvas, monitorTypeChart, data.types.map(function(x){return x.label;}), data.types.map(function(x){return x.value;}), 'Tipo A/B/C/D');
   }
   var demandCanvas=document.getElementById('monitor-demand-chart');
   if(demandCanvas){
@@ -1205,6 +1246,16 @@ function renderMonitoring(){
     var hourlyNeeded = data.hourlyNeeded.slice();
     hourlyNeeded.push(hourlyNeeded.length ? hourlyNeeded[hourlyNeeded.length-1] : 0);
     monitorDemandChart=drawMonitorDemandChart(demandCanvas, monitorDemandChart, labels, hourlyNeeded, data.buses.length);
+  }
+
+  var typeDetail=document.getElementById('monitor-type-detail-list');
+  if(typeDetail){
+    var grouped=data.types.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Clasificación agrupada para operación</small></div>'; }).join('');
+    var exact=data.typeDetailCounts.slice(0,8).map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Tipo exacto detectado en registro</small></div>'; }).join('');
+    var unknownTypes=data.unknownTypeSamples.length ? '<div class="monitor-empty">Patentes sin tipo A/B/C/D claro</div>'+data.unknownTypeSamples.map(function(item){
+      return '<div class="monitor-row"><strong>'+esc(item.plate)+'</strong><span>'+esc(item.route)+'</span><small>Tipo registrado: '+esc(item.type)+'</small></div>';
+    }).join('') : '<div class="monitor-empty">Todas las patentes visibles tienen clasificación A/B/C/D.</div>';
+    typeDetail.innerHTML=grouped+exact+unknownTypes;
   }
 
   var timeList=document.getElementById('monitor-time-list');
