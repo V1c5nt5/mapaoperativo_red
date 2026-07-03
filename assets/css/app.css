@@ -1373,3 +1373,7 @@ body[data-map-mode="monitor"] .geo-workspace{
   body[data-map-mode="monitor"] .context-panel,
   body.monitor-fullscreen .context-panel{left:8px;right:8px;top:8px;bottom:8px}
 }
+
+.filter-help{display:block;margin-top:6px;font-size:.82rem;line-height:1.35;opacity:.78;}
+.panel-actions-inline{margin-top:10px;}
+#bus-route-filter{min-height:168px;}

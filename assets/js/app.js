@@ -3047,12 +3047,52 @@ function fillBusOperatorOptions(){
   if(Array.from(select.options).some(function(option){return option.value===keep;})) select.value=keep;
   else select.value='__all';
 }
+function getSelectedBusRoutes(){
+  var routeSelect=document.getElementById('bus-route-filter');
+  if(!routeSelect) return [];
+  return Array.prototype.slice.call(routeSelect.selectedOptions||[]).map(function(option){ return option.value; }).filter(function(value){
+    return value && value!=='__all';
+  });
+}
+function syncBusRouteAllOption(routeSelect){
+  if(!routeSelect) return;
+  var options=Array.prototype.slice.call(routeSelect.options||[]);
+  var selectedSpecific=options.some(function(option){ return option.selected && option.value && option.value!=='__all'; });
+  var allOption=null;
+  for(var i=0;i<options.length;i++){
+    if(options[i].value==='__all'){ allOption=options[i]; break; }
+  }
+  if(allOption){
+    if(selectedSpecific){
+      allOption.selected=false;
+    } else if(!Array.prototype.slice.call(routeSelect.selectedOptions||[]).length){
+      allOption.selected=true;
+    }
+  }
+}
+function clearBusRoutes(){
+  var routeSelect=document.getElementById('bus-route-filter');
+  if(!routeSelect) return;
+  Array.prototype.slice.call(routeSelect.options||[]).forEach(function(option){
+    option.selected = option.value==='__all';
+  });
+  renderBusLayer();
+}
+function onBusRouteChange(){
+  var routeSelect=document.getElementById('bus-route-filter');
+  if(routeSelect){
+    syncBusRouteAllOption(routeSelect);
+  }
+  renderBusLayer();
+}
 function updateBusRouteOptions(){
   var operatorSelect=document.getElementById('bus-operator-filter');
   var routeSelect=document.getElementById('bus-route-filter');
   if(!routeSelect) return;
   var operator=operatorSelect?operatorSelect.value:'__all';
-  var keep=routeSelect.value||'__all';
+  var kept=Array.prototype.slice.call(routeSelect.selectedOptions||[]).map(function(option){ return option.value; }).filter(function(value){
+    return value && value!=='__all';
+  });
   var routes=Object.create(null);
 
   (DATA.decoRows||[]).forEach(function(row){
@@ -3081,10 +3121,18 @@ function updateBusRouteOptions(){
     option.textContent=routes[key].label+' ('+(routes[key].count?busCountText(routes[key].count):'sin buses actuales')+')';
     routeSelect.appendChild(option);
   });
-  if(Array.from(routeSelect.options).some(function(option){return option.value===keep;})) routeSelect.value=keep;
-  else routeSelect.value='__all';
+
+  if(kept.length){
+    Array.prototype.slice.call(routeSelect.options||[]).forEach(function(option){
+      option.selected = kept.indexOf(option.value)!==-1;
+    });
+    syncBusRouteAllOption(routeSelect);
+  } else {
+    routeSelect.value='__all';
+  }
 }
 function onBusOperatorChange(){
+
   updateBusRouteOptions();
   renderBusLayer();
 }
@@ -3101,17 +3149,18 @@ function filteredBuses(){
   var routeSelect=document.getElementById('bus-route-filter');
   var plateInput=document.getElementById('bus-plate-filter');
   var operator=operatorSelect?operatorSelect.value:'__all';
-  var route=routeSelect?routeSelect.value:'__all';
+  var selectedRoutes=getSelectedBusRoutes();
   var plateQuery=normalizeBusKey(plateInput?plateInput.value:'');
   return BUS_STATE.features.filter(function(bus){
     if(plateQuery && normalizeBusKey(bus.plate).indexOf(plateQuery)===-1) return false;
     if(operator!=='__all' && bus.operatorKey!==operator) return false;
-    if(route!=='__all' && bus.routeKey!==route) return false;
+    if(selectedRoutes.length && selectedRoutes.indexOf(bus.routeKey)===-1) return false;
     if(BUS_STATE.direction!=='all' && bus.direction!==BUS_STATE.direction) return false;
     return true;
   });
 }
-function busPopupHtml(bus){ 
+function busPopupHtml(bus){
+ 
   var vehicle=vehicleInfoByPlate(bus.plate)||{};
   var speed=bus.speed===null?'No informada':bus.speed.toLocaleString('es-CL',{maximumFractionDigits:1})+' km/h';
   
@@ -3152,7 +3201,7 @@ function renderBusLayer(){
   var suffix=BUS_STATE.sourceCount<2?' Parte de la información no está disponible.':'';
   setBusStatus(
     'Buses visibles: '+buses.length,
-    'Buses informados: '+BUS_STATE.features.length+'. Recorridos disponibles: '+BUS_STATE.catalogRoutes+'. Actualizado: '+formatBusDate(BUS_STATE.lastLoadedAt)+'.'+suffix,
+    'Buses informados: '+BUS_STATE.features.length+'. Recorridos disponibles: '+BUS_STATE.catalogRoutes+'. Seleccionados: '+(getSelectedBusRoutes().length||'todos')+'. Actualizado: '+formatBusDate(BUS_STATE.lastLoadedAt)+'.'+suffix,
     BUS_STATE.sourceCount<2?'warning':'ready',
     'Actualización cada 60 segundos solo mientras esta vista está activa.'
   );

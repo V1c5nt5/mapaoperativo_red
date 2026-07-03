@@ -296,11 +296,16 @@
               </select>
             </div>
             <div class="fg">
-              <label for="bus-route-filter">Recorrido</label>
-              <select id="bus-route-filter" onchange="renderBusLayer()">
-                <option value="__all">Todos los recorridos</option>
+              <label for="bus-route-filter">Recorridos</label>
+              <select id="bus-route-filter" multiple size="7" onchange="onBusRouteChange()">
+                <option value="__all" selected>Todos los recorridos</option>
               </select>
+              <small class="filter-help">Selecciona uno o varios recorridos. Usa Ctrl/Cmd para marcar más de uno.</small>
             </div>
+          </div>
+
+          <div class="panel-actions panel-actions-inline">
+            <button class="secondary-action compact-action" type="button" onclick="clearBusRoutes()">Limpiar recorridos</button>
           </div>
 
           <div class="segmented-control bus-dir-tabs" aria-label="Sentido del recorrido">
