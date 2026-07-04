@@ -1021,10 +1021,15 @@ function buildHourlyDemand(trips){
   });
   return hourly;
 }
-function drawMonitorDemandChart(canvas, chartRef, labels, needed, currentCount){
+function drawMonitorDemandChart(canvas, chartRef, labels, needed, currentCount, currentHour){
   if(!canvas || !window.Chart) return chartRef;
   if(chartRef) chartRef.destroy();
-  var currentSeries = labels.map(function(){ return currentCount; });
+  var currentSeries = labels.map(function(_, idx){
+    return idx === currentHour ? currentCount : null;
+  });
+  var maxNeeded = 0;
+  for(var i=0;i<needed.length;i++) if(Number(needed[i])>maxNeeded) maxNeeded = Number(needed[i]);
+  var maxCurrent = Number(currentCount)||0;
   return new Chart(canvas.getContext('2d'),{
     type:'line',
     data:{
@@ -1037,10 +1042,10 @@ function drawMonitorDemandChart(canvas, chartRef, labels, needed, currentCount){
           backgroundColor:'rgba(143,32,24,.10)',
           pointBackgroundColor:'#8f2018',
           pointBorderColor:'#8f2018',
-          pointRadius:3,
-          pointHoverRadius:5,
+          pointRadius:2,
+          pointHoverRadius:4,
           borderWidth:3,
-          tension:.28,
+          tension:.25,
           fill:false
         },
         {
@@ -1050,25 +1055,29 @@ function drawMonitorDemandChart(canvas, chartRef, labels, needed, currentCount){
           backgroundColor:'rgba(37,99,235,.08)',
           pointBackgroundColor:'#2563eb',
           pointBorderColor:'#2563eb',
-          pointRadius:2,
-          pointHoverRadius:4,
-          borderWidth:3,
-          tension:.18,
-          fill:false
+          pointRadius:5,
+          pointHoverRadius:6,
+          borderWidth:0,
+          showLine:false,
+          spanGaps:false
         }
       ]
     },
     options:{
       responsive:true,
       maintainAspectRatio:false,
-      interaction:{mode:'index',intersect:false},
+      interaction:{mode:'nearest',intersect:false},
       scales:{
         x:{grid:{display:false},ticks:{autoSkip:true,maxRotation:0,minRotation:0}},
-        y:{beginAtZero:true,grid:{color:'rgba(100,113,123,.14)'}}
+        y:{
+          beginAtZero:true,
+          suggestedMax:Math.max(maxNeeded, maxCurrent) + 5,
+          grid:{color:'rgba(100,113,123,.14)'}
+        }
       },
       plugins:{
         legend:{position:'bottom',labels:{boxWidth:12,boxHeight:12,usePointStyle:true}},
-        tooltip:{callbacks:{label:function(ctx){return ' '+ctx.dataset.label+': '+ctx.parsed.y+' buses';}}}
+        tooltip:{callbacks:{label:function(ctx){ return ctx.parsed.y==null ? '' : (' '+ctx.dataset.label+': '+ctx.parsed.y+' buses');}}}
       }
     }
   });
@@ -1265,22 +1274,18 @@ function renderMonitoring(){
   var demandCanvas=document.getElementById('monitor-demand-chart');
   if(demandCanvas){
     var labels=[];
-    for(var i=0;i<=24;i++) labels.push(String(i).padStart(2,'0')+':00');
-    var hourlyNeeded = data.hourlyNeeded.slice();
-    hourlyNeeded.push(hourlyNeeded.length ? hourlyNeeded[hourlyNeeded.length-1] : 0);
-    monitorDemandChart=drawMonitorDemandChart(demandCanvas, monitorDemandChart, labels, hourlyNeeded, data.buses.length);
+    for(var i=0;i<24;i++) labels.push(String(i).padStart(2,'0')+':00');
+    monitorDemandChart=drawMonitorDemandChart(demandCanvas, monitorDemandChart, labels, data.hourlyNeeded.slice(0,24), data.buses.length, data.currentHour);
   }
 
   var typeDetail=document.getElementById('monitor-type-detail-list');
   if(typeDetail){
-    var familyHead='<div class="monitor-empty">Familias operativas</div>';
-    var grouped=data.typeFamilies.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Familia A/B/C/D</small></div>'; }).join('');
-    var exactHead='<div class="monitor-empty">Tipos exactos</div>';
-    var exact=data.types.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Tipo exacto del registro</small></div>'; }).join('');
-    var unknownTypes=data.unknownTypeSamples.length ? '<div class="monitor-empty">Casos sin clasificación exacta</div>'+data.unknownTypeSamples.map(function(item){
-      return '<div class="monitor-row"><strong>'+esc(item.plate)+'</strong><span>'+esc(item.route)+'</span><small>Registro: '+esc(item.type)+'</small></div>';
-    }).join('') : '<div class="monitor-empty">No hay buses sin clasificación exacta.</div>';
-    typeDetail.innerHTML=familyHead+grouped+exactHead+exact+unknownTypes;
+    var exactHead='<div class="monitor-empty">Tipos detectados</div>';
+    var exact=data.types.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span></div>'; }).join('');
+    if(!exact){
+      exact='<div class="monitor-empty">Sin datos de tipos de flota.</div>';
+    }
+    typeDetail.innerHTML=exactHead+exact;
   }
 
   var timeList=document.getElementById('monitor-time-list');
