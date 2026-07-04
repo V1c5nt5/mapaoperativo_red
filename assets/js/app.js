@@ -1,7 +1,16 @@
 
 var VEHICLE_REGISTRY={};
 async function loadVehicleRegistry(){
- try{ VEHICLE_REGISTRY=await (await fetch('https://raw.githubusercontent.com/V1c5nt5/stpm_gtfs/main/data/vehicle_registry.json',{cache:'no-store'})).json(); }catch(e){ VEHICLE_REGISTRY={};}
+  var sources=['vehicle_registry.json','https://raw.githubusercontent.com/V1c5nt5/stpm_gtfs/main/data/vehicle_registry.json'];
+  for(var i=0;i<sources.length;i++){
+    try{
+      var res=await fetch(sources[i],{cache:'no-store'});
+      if(!res.ok) continue;
+      var data=await res.json();
+      if(data && typeof data==='object'){ VEHICLE_REGISTRY=data; return; }
+    }catch(e){}
+  }
+  VEHICLE_REGISTRY={};
 }
 loadVehicleRegistry();
 function vehicleInfoByPlate(plate){
@@ -13,6 +22,8 @@ function vehicleInfoByPlate(plate){
 
 var SVC = {L:'Lunes a Viernes', S:'Sábado', D:'Domingo', F:'Festivo', LJ:'Lun a Jue', V:'Viernes'};
 var DAY_NAMES = ['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
+var BUS_TYPE_FAMILY_ORDER = ['A','B','C','D','Sin dato','Sin clasificar'];
+var BUS_TYPE_EXACT_ORDER = ['A1','A2','B1','B2','B2P','C2','D','Sin dato','Sin clasificar'];
 var DATA = freshData();
 var GITHUB_OWNER = 'V1c5nt5';
 var GITHUB_REPO = 'stpm_gtfs';
@@ -878,9 +889,10 @@ function busTypeBucket(vehicle){
   return 'Sin clasificar';
 }
 function busTypeExactLabel(vehicle){
-  var raw=String(vehicle&&vehicle.type||'').trim();
+  var raw=String(vehicle&&vehicle.type||'').trim().toUpperCase().replace(/\s+/g,'');
   if(!raw) return 'Sin dato';
-  return raw;
+  if(/^(A1|A2|B1|B2|B2P|C2|D)$/.test(raw)) return raw;
+  return String(vehicle&&vehicle.type||'').trim() || 'Sin dato';
 }
 function currentDateKey(date){
   var d=date instanceof Date ? date : new Date(date);
@@ -933,6 +945,15 @@ function tripStartEndSafe(tripId){
 }
 function arrayTopCounts(map){
   return Object.keys(map).map(function(key){ return {label:key, value:map[key]}; }).sort(function(a,b){ return b.value-a.value || a.label.localeCompare(b.label, undefined, {numeric:true, sensitivity:'base'}); });
+}
+function sortTypeRows(rows, exact){
+  var order = exact ? BUS_TYPE_EXACT_ORDER : BUS_TYPE_FAMILY_ORDER;
+  return rows.slice().sort(function(a,b){
+    var ia = order.indexOf(a.label);
+    var ib = order.indexOf(b.label);
+    if(ia !== -1 || ib !== -1) return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    return b.value - a.value || String(a.label).localeCompare(String(b.label), undefined, {numeric:true, sensitivity:'base'});
+  });
 }
 function doughnutColors(count){
   var palette=['#8f2018','#c54f1d','#d98b17','#2e6f95','#4f6bed','#7c3aed','#2f855a','#6b7280','#9b2c2c','#0f766e'];
@@ -1090,7 +1111,7 @@ function stopMonitorClock(){
 function buildMonitoringSummary(){
   var buses=BUS_STATE.features||[];
   var vehicles=buses.map(function(bus){ return {bus:bus, info:vehicleInfoByPlate(bus.plate)||{}}; });
-  var techs={}, types={}, operators={}, statuses={};
+  var techs={}, typeFamilies={}, typeExactCounts={}, operators={}, statuses={};
   var recentCount=0, recognizedCount=0, unknownPlateCount=0, validPlateCount=0, busRouteCount=0;
   var unknownTypeSamples=[], unknownTechSamples=[], typeDetailCounts={};
   vehicles.forEach(function(item){
@@ -1099,8 +1120,8 @@ function buildMonitoringSummary(){
     var type=busTypeBucket(info);
     var exactType=busTypeExactLabel(info);
     techs[tech]=(techs[tech]||0)+1;
-    types[type]=(types[type]||0)+1;
-    typeDetailCounts[exactType]=(typeDetailCounts[exactType]||0)+1;
+    typeFamilies[type]=(typeFamilies[type]||0)+1;
+    typeExactCounts[exactType]=(typeExactCounts[exactType]||0)+1;
     operators[bus.operatorName||'Operador no informado']=(operators[bus.operatorName||'Operador no informado']||0)+1;
     var valid=busValidationStatus(bus);
     statuses[valid]=(statuses[valid]||0)+1;
@@ -1160,7 +1181,8 @@ function buildMonitoringSummary(){
   var byOperator=arrayTopCounts(operators).slice(0,5);
   var busRoutesActive=unique(trips.map(function(t){ return t.route_id; })).length;
   var tripsWithIssues=trips.length-gtfsTripsWithTimes;
-  var groupedTypeRows=arrayTopCounts(types);
+  var groupedTypeRows=sortTypeRows(arrayTopCounts(typeFamilies), false);
+  var exactTypeRows=sortTypeRows(arrayTopCounts(typeExactCounts), true);
   var groupedTechRows=arrayTopCounts(techs);
   if(!serviceIds.length) alerts.push({label:'Sin servicio activo para hoy', value:'Revisa la fecha del feed GTFS o la configuración del calendario.'});
   alerts.push({label:'Cobertura GTFS', value:qualityScore+'%', detail:'Promedio entre coincidencia de catálogo, señal reciente, patente y horarios completos.'});
@@ -1180,8 +1202,9 @@ function buildMonitoringSummary(){
   return {
     buses:buses,
     techs:groupedTechRows,
-    types:groupedTypeRows,
-    typeDetailCounts:arrayTopCounts(typeDetailCounts),
+    types:exactTypeRows,
+    typeFamilies:groupedTypeRows,
+    typeDetailCounts:exactTypeRows,
     statuses:statuses,
     recognizedCount:recognizedCount,
     recentCount:recentCount,
@@ -1237,7 +1260,7 @@ function renderMonitoring(){
   }
   var typeCanvas=document.getElementById('monitor-type-chart');
   if(typeCanvas){
-    monitorTypeChart=drawMonitorDoughnut(typeCanvas, monitorTypeChart, data.types.map(function(x){return x.label;}), data.types.map(function(x){return x.value;}), 'Tipo A/B/C/D');
+    monitorTypeChart=drawMonitorDoughnut(typeCanvas, monitorTypeChart, data.types.map(function(x){return x.label;}), data.types.map(function(x){return x.value;}), 'Tipos exactos');
   }
   var demandCanvas=document.getElementById('monitor-demand-chart');
   if(demandCanvas){
@@ -1250,12 +1273,14 @@ function renderMonitoring(){
 
   var typeDetail=document.getElementById('monitor-type-detail-list');
   if(typeDetail){
-    var grouped=data.types.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Clasificación agrupada para operación</small></div>'; }).join('');
-    var exact=data.typeDetailCounts.slice(0,8).map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Tipo exacto detectado en registro</small></div>'; }).join('');
-    var unknownTypes=data.unknownTypeSamples.length ? '<div class="monitor-empty">Patentes sin tipo A/B/C/D claro</div>'+data.unknownTypeSamples.map(function(item){
-      return '<div class="monitor-row"><strong>'+esc(item.plate)+'</strong><span>'+esc(item.route)+'</span><small>Tipo registrado: '+esc(item.type)+'</small></div>';
-    }).join('') : '<div class="monitor-empty">Todas las patentes visibles tienen clasificación A/B/C/D.</div>';
-    typeDetail.innerHTML=grouped+exact+unknownTypes;
+    var familyHead='<div class="monitor-empty">Familias operativas</div>';
+    var grouped=data.typeFamilies.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Familia A/B/C/D</small></div>'; }).join('');
+    var exactHead='<div class="monitor-empty">Tipos exactos</div>';
+    var exact=data.types.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span><small>Tipo exacto del registro</small></div>'; }).join('');
+    var unknownTypes=data.unknownTypeSamples.length ? '<div class="monitor-empty">Casos sin clasificación exacta</div>'+data.unknownTypeSamples.map(function(item){
+      return '<div class="monitor-row"><strong>'+esc(item.plate)+'</strong><span>'+esc(item.route)+'</span><small>Registro: '+esc(item.type)+'</small></div>';
+    }).join('') : '<div class="monitor-empty">No hay buses sin clasificación exacta.</div>';
+    typeDetail.innerHTML=familyHead+grouped+exactHead+exact+unknownTypes;
   }
 
   var timeList=document.getElementById('monitor-time-list');
