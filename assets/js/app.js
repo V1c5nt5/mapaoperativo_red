@@ -45,7 +45,7 @@ function freshData(){
     availableSources:{gtfs:false,deco:false,param:false}, decoCompatible:false, decoDateGapDays:null, analytics:null
   };
 }
-var freqChart = null, stopChart = null, overviewChart = null, monitorTechChart = null, monitorTypeChart = null, monitorDemandChart = null;
+var freqChart = null, stopChart = null, overviewChart = null, monitorTechChart = null, monitorTypeChart = null, monitorOperatorChart = null, monitorDemandChart = null;
 var monitorRefreshTimer = null, monitorClockTimer = null;
 var leafMap = null, layerIda = null, layerReg = null, layerStops = null, routeMapBounds = null;
 var BUS_ENDPOINTS = [
@@ -1083,6 +1083,57 @@ function drawMonitorDemandChart(canvas, chartRef, labels, needed, currentCount, 
   });
 }
 
+
+function drawMonitorBarChart(canvas, chartRef, labels, values, title){
+  if(!canvas || !window.Chart) return chartRef;
+  if(chartRef) chartRef.destroy();
+  return new Chart(canvas.getContext('2d'),{
+    type:'bar',
+    data:{
+      labels:labels,
+      datasets:[{
+        label:title,
+        data:values,
+        backgroundColor:'rgba(143,32,24,.82)',
+        borderColor:'#8f2018',
+        borderWidth:1,
+        borderRadius:8,
+        maxBarThickness:34
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false,
+      indexAxis:'y',
+      scales:{
+        x:{beginAtZero:true, grid:{color:'rgba(100,113,123,.14)'}},
+        y:{grid:{display:false}}
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:function(ctx){ return ' '+ctx.parsed.x+' buses'; }}}
+      }
+    }
+  });
+}
+
+function formatMonitorStamp(value){
+  var date=value instanceof Date ? value : parseBusDate(value);
+  if(!date) return 'Dato no disponible';
+  return new Intl.DateTimeFormat('es-CL',{
+    day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'
+  }).format(date).replace(',',' -');
+}
+
+function routeForPublicCode(code){
+  var key=normalizeBusKey(code);
+  if(!key) return null;
+  return Object.values(DATA.routes||{}).find(function(route){
+    return normalizeBusKey(route.route_short_name||route.route_id||'')===key ||
+      normalizeBusKey(route.route_id||'')===key;
+  }) || null;
+}
+
 function updateMonitorClock(){
   var now = new Date();
   var clock=document.getElementById('monitor-clock');
@@ -1117,12 +1168,15 @@ function stopMonitorClock(){
   }
 }
 
+
 function buildMonitoringSummary(){
   var buses=BUS_STATE.features||[];
   var vehicles=buses.map(function(bus){ return {bus:bus, info:vehicleInfoByPlate(bus.plate)||{}}; });
   var techs={}, typeFamilies={}, typeExactCounts={}, operators={}, statuses={};
   var recentCount=0, recognizedCount=0, unknownPlateCount=0, validPlateCount=0, busRouteCount=0;
-  var unknownTypeSamples=[], unknownTechSamples=[], typeDetailCounts={};
+  var unknownTypeSamples=[], unknownTechSamples=[];
+  var codeBuckets=Object.create(null);
+
   vehicles.forEach(function(item){
     var bus=item.bus, info=item.info||{};
     var tech=busTechBucket(info);
@@ -1132,6 +1186,17 @@ function buildMonitoringSummary(){
     typeFamilies[type]=(typeFamilies[type]||0)+1;
     typeExactCounts[exactType]=(typeExactCounts[exactType]||0)+1;
     operators[bus.operatorName||'Operador no informado']=(operators[bus.operatorName||'Operador no informado']||0)+1;
+
+    var code=String(bus.publicRoute||bus.routeKey||bus.rawRoute||'Sin código').trim()||'Sin código';
+    var codeKey=normalizeBusKey(code);
+    if(!codeBuckets[codeKey]){
+      codeBuckets[codeKey]={code:code, buses:[], firstSeen:null, route:routeForPublicCode(code)};
+    }
+    codeBuckets[codeKey].buses.push(bus);
+    if(bus.timestamp && (!codeBuckets[codeKey].firstSeen || bus.timestamp<codeBuckets[codeKey].firstSeen)){
+      codeBuckets[codeKey].firstSeen=bus.timestamp;
+    }
+
     var valid=busValidationStatus(bus);
     statuses[valid]=(statuses[valid]||0)+1;
     if(valid==='validado') recognizedCount++;
@@ -1159,7 +1224,10 @@ function buildMonitoringSummary(){
   var currentHour=now.getHours();
   var matches=[];
   var hourlyNeeded=buildHourlyDemand(trips);
+  var tripsByRoute=Object.create(null);
   trips.forEach(function(trip){
+    if(!tripsByRoute[trip.route_id]) tripsByRoute[trip.route_id]=[];
+    tripsByRoute[trip.route_id].push(trip);
     var route=DATA.routes[trip.route_id]||{};
     var se=tripStartEndSafe(trip.trip_id);
     if(!se) return;
@@ -1174,6 +1242,27 @@ function buildMonitoringSummary(){
   });
   matches.sort(function(a,b){ return a.route.localeCompare(b.route, undefined, {numeric:true, sensitivity:'base'}) || a.kind.localeCompare(b.kind); });
 
+  var codeFlowRows=Object.keys(codeBuckets).map(function(key){
+    var group=codeBuckets[key];
+    var route=group.route;
+    var routeTrips=route && tripsByRoute[String(route.route_id)] ? tripsByRoute[String(route.route_id)] : [];
+    var plannedStart=routeTrips.reduce(function(min, trip){
+      var se=tripStartEndSafe(trip.trip_id);
+      if(!se) return min;
+      return min===null ? se.departure : Math.min(min, se.departure);
+    }, null);
+    return {
+      code:group.code,
+      count:group.buses.length,
+      plates:group.buses.map(function(bus){ return bus.plate || 'Sin patente'; }),
+      firstSeen:group.firstSeen,
+      route:route,
+      plannedStart:plannedStart
+    };
+  }).sort(function(a,b){
+    return (b.count-a.count) || String(a.code).localeCompare(String(b.code),undefined,{numeric:true,sensitivity:'base'});
+  });
+
   var totalBuses=buses.length;
   var routeValidationPct=percent(recognizedCount,totalBuses);
   var recentPct=percent(recentCount,totalBuses);
@@ -1187,7 +1276,8 @@ function buildMonitoringSummary(){
   var alerts=[];
   var staleCount=vehicles.filter(function(item){ return item.bus.timestamp && (Date.now()-item.bus.timestamp.getTime())>20*60*1000; }).length;
   var noCatalogCount=buses.length-recognizedCount;
-  var byOperator=arrayTopCounts(operators).slice(0,5);
+  var operatorRows=arrayTopCounts(operators).sort(function(a,b){ return b.value-a.value || a.label.localeCompare(b.label,undefined,{numeric:true,sensitivity:'base'}); });
+  var byOperator=operatorRows.slice(0,5);
   var busRoutesActive=unique(trips.map(function(t){ return t.route_id; })).length;
   var tripsWithIssues=trips.length-gtfsTripsWithTimes;
   var groupedTypeRows=sortTypeRows(arrayTopCounts(typeFamilies), false);
@@ -1237,12 +1327,15 @@ function buildMonitoringSummary(){
     busRoutesActive:busRoutesActive,
     busRouteCount:busRouteCount,
     byOperator:byOperator,
+    operatorRows:operatorRows,
     routeCatalog:routeCatalog,
     noCatalogCount:noCatalogCount,
     unknownTypeSamples:unknownTypeSamples,
-    unknownTechSamples:unknownTechSamples
+    unknownTechSamples:unknownTechSamples,
+    codeFlowRows:codeFlowRows
   };
 }
+
 function renderMonitoring(){
   var data=buildMonitoringSummary();
   updateMonitorClock();
@@ -1263,6 +1356,8 @@ function renderMonitoring(){
     ].map(function(x){ return '<div class="stat-card"><div class="lbl">'+esc(x[0])+'</div><div class="val">'+esc(x[1])+'</div><div class="sub">'+esc(x[2])+'</div></div>'; }).join('');
   }
 
+  var stamp=formatMonitorStamp(BUS_STATE.lastLoadedAt || data.now);
+
   var techCanvas=document.getElementById('monitor-tech-chart');
   if(techCanvas){
     monitorTechChart=drawMonitorDoughnut(techCanvas, monitorTechChart, data.techs.map(function(x){return x.label;}), data.techs.map(function(x){return x.value;}), 'Tecnología');
@@ -1271,6 +1366,11 @@ function renderMonitoring(){
   if(typeCanvas){
     monitorTypeChart=drawMonitorDoughnut(typeCanvas, monitorTypeChart, data.types.map(function(x){return x.label;}), data.types.map(function(x){return x.value;}), 'Tipos exactos');
   }
+  var operatorCanvas=document.getElementById('monitor-operator-chart');
+  if(operatorCanvas){
+    var opRows=data.operatorRows.slice(0,12);
+    monitorOperatorChart=drawMonitorBarChart(operatorCanvas, monitorOperatorChart, opRows.map(function(x){ return x.label; }), opRows.map(function(x){ return x.value; }), 'Buses por operador');
+  }
   var demandCanvas=document.getElementById('monitor-demand-chart');
   if(demandCanvas){
     var labels=[];
@@ -1278,34 +1378,47 @@ function renderMonitoring(){
     monitorDemandChart=drawMonitorDemandChart(demandCanvas, monitorDemandChart, labels, data.hourlyNeeded.slice(0,24), data.buses.length, data.currentHour);
   }
 
-  var typeDetail=document.getElementById('monitor-type-detail-list');
-  if(typeDetail){
-    var exactHead='<div class="monitor-empty">Tipos detectados</div>';
-    var exact=data.types.map(function(x){ return '<div class="monitor-row"><strong>'+esc(x.label)+'</strong><span>'+esc(x.value.toLocaleString('es-CL'))+' buses</span></div>'; }).join('');
-    if(!exact){
-      exact='<div class="monitor-empty">Sin datos de tipos de flota.</div>';
-    }
-    typeDetail.innerHTML=exactHead+exact;
+  ['monitor-tech-stamp','monitor-type-stamp','monitor-operator-stamp','monitor-demand-stamp'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.textContent='Dato: '+stamp;
+  });
+
+  var techMini=document.getElementById('monitor-tech-mini');
+  if(techMini){
+    techMini.innerHTML=data.unknownTechSamples.length
+      ? data.unknownTechSamples.map(function(item){
+          return '<div class="monitor-mini-item"><strong>'+esc(item.plate)+'</strong><span>'+esc(item.route)+' · '+esc(item.tech)+'</span></div>';
+        }).join('')
+      : '<div class="monitor-mini-empty">Sin buses sin tecnología detectada.</div>';
+  }
+
+  var typeMini=document.getElementById('monitor-type-mini');
+  if(typeMini){
+    typeMini.innerHTML=data.unknownTypeSamples.length
+      ? data.unknownTypeSamples.map(function(item){
+          return '<div class="monitor-mini-item"><strong>'+esc(item.plate)+'</strong><span>'+esc(item.route)+' · '+esc(item.type)+'</span></div>';
+        }).join('')
+      : '<div class="monitor-mini-empty">Sin buses sin tipo exacto.</div>';
   }
 
   var timeList=document.getElementById('monitor-time-list');
   if(timeList){
-    if(!data.matches.length){
-      timeList.innerHTML='<div class="monitor-empty">No hay recorridos de buses que comiencen o terminen exactamente a esta hora.</div>';
+    if(!data.codeFlowRows.length){
+      timeList.innerHTML='<div class="monitor-empty">No hay códigos activos para mostrar.</div>';
     }else{
-      timeList.innerHTML=data.matches.slice(0,12).map(function(item){
-        return '<div class="monitor-row"><strong>'+esc(item.kind)+' · '+esc(item.time)+'</strong><span>'+esc(item.route)+' · '+esc(item.long||'Sin nombre')+'</span><small>'+esc(item.service)+' · '+esc(item.dir)+'</small></div>';
+      timeList.innerHTML=data.codeFlowRows.slice(0,12).map(function(item){
+        var routeLabel=item.route ? (item.route.route_short_name||item.route.route_id||item.code) : item.code;
+        var routeLong=item.route ? (item.route.route_long_name||'Sin nombre') : 'Sin nombre';
+        var plates=item.plates.slice(0,6).join(', ') + (item.plates.length>6 ? '…' : '');
+        var realStart=item.firstSeen ? formatMonitorStamp(item.firstSeen) : 'Dato no disponible';
+        var gtfsStart=item.plannedStart===null ? 'Sin inicio GTFS' : secsToTime(item.plannedStart);
+        return '<div class="monitor-row"><strong>'+esc(routeLabel)+' · '+esc(item.count.toLocaleString('es-CL'))+' buses</strong><span>'+esc('Patentes: '+plates)+'</span><small>Inicio real: '+esc(realStart)+' · Inicio GTFS: '+esc(gtfsStart)+' · '+esc(routeLong)+'</small></div>';
       }).join('');
     }
   }
-
-  var alertList=document.getElementById('monitor-alert-list');
-  if(alertList){
-    alertList.innerHTML=data.alerts.map(function(item){
-      return '<div class="monitor-row"><strong>'+esc(item.label)+'</strong><span>'+esc(item.value)+'</span><small>'+esc(item.detail||'Monitoreo operativo')+'</small></div>';
-    }).join('');
-  }
 }
+
+
 function startMonitorRefresh(){
   stopMonitorRefresh();
   if(CURRENT_MAP_MODE!=='monitor') return;
@@ -3403,6 +3516,7 @@ function toggleDetailsSheet(force){
     if(overviewChart) overviewChart.resize();
     if(monitorTechChart) monitorTechChart.resize();
     if(monitorTypeChart) monitorTypeChart.resize();
+    if(monitorOperatorChart) monitorOperatorChart.resize();
     if(monitorDemandChart) monitorDemandChart.resize();
   },260);
 }

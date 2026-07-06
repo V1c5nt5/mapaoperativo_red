@@ -1293,11 +1293,39 @@ body[data-map-mode="ruta"] .bus-map-legend{display:flex}
 .monitor-stats-row{margin-top:2px}
 .monitor-chart-grid,.monitor-lists-grid{margin-top:14px}
 .monitor-chart-wrap{min-height:300px}
+.monitor-operator-wrap{min-height:360px}
 .monitor-demand-wrap{min-height:330px}
+.monitor-chart-foot{display:grid;gap:10px;margin-top:10px}
+.monitor-chart-stamp{display:block;color:var(--muted-2);font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+.monitor-mini{display:grid;gap:8px}
+.monitor-mini-item,.monitor-mini-empty{
+  padding:9px 11px;
+  border:1px dashed var(--line-strong);
+  border-radius:12px;
+  background:var(--surface-2);
+}
+.monitor-mini-item strong{
+  display:block;
+  color:var(--ink);
+  font-size:12px;
+  line-height:1.3;
+}
+.monitor-mini-item span{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.35;
+}
+.monitor-mini-empty{
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.4;
+}
 .monitor-list{
   display:grid;
   gap:10px;
-  min-height:220px;
+  min-height:180px;
 }
 .monitor-row,.monitor-empty{
   padding:12px 13px;

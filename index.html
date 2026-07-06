@@ -218,6 +218,7 @@
                 </div>
               </div>
               <div class="chart-wrap monitor-chart-wrap"><canvas id="monitor-tech-chart"></canvas></div>
+              <div class="monitor-chart-foot"><span id="monitor-tech-stamp" class="monitor-chart-stamp">Dato: --</span><div id="monitor-tech-mini" class="monitor-mini"></div></div>
             </article>
             <article class="sheet-card">
               <div class="card-head">
@@ -227,6 +228,17 @@
                 </div>
               </div>
               <div class="chart-wrap monitor-chart-wrap"><canvas id="monitor-type-chart"></canvas></div>
+              <div class="monitor-chart-foot"><span id="monitor-type-stamp" class="monitor-chart-stamp">Dato: --</span><div id="monitor-type-mini" class="monitor-mini"></div></div>
+            </article>
+            <article class="sheet-card">
+              <div class="card-head">
+                <div>
+                  <span class="card-kicker">Operadores</span>
+                  <h3>Buses por operador</h3>
+                </div>
+              </div>
+              <div class="chart-wrap monitor-chart-wrap monitor-operator-wrap"><canvas id="monitor-operator-chart"></canvas></div>
+              <div class="monitor-chart-foot"><span id="monitor-operator-stamp" class="monitor-chart-stamp">Dato: --</span></div>
             </article>
             <article class="sheet-card span-2">
               <div class="card-head">
@@ -236,20 +248,12 @@
                 </div>
               </div>
               <div class="chart-wrap monitor-demand-wrap"><canvas id="monitor-demand-chart"></canvas></div>
-            </article>
-            <article class="sheet-card span-2">
-              <div class="card-head">
-                <div>
-                  <span class="card-kicker">Tipos</span>
-                  <h3>Tipos detectados</h3>
-                </div>
-              </div>
-              <div id="monitor-type-detail-list" class="monitor-list"></div>
+              <div class="monitor-chart-foot"><span id="monitor-demand-stamp" class="monitor-chart-stamp">Dato: --</span></div>
             </article>
           </div>
 
           <div class="sheet-grid two monitor-lists-grid">
-            <article class="sheet-card">
+            <article class="sheet-card span-2">
               <div class="card-head">
                 <div>
                   <span class="card-kicker">Hora actual</span>
@@ -258,19 +262,11 @@
               </div>
               <div id="monitor-time-list" class="monitor-list"></div>
             </article>
-            <article class="sheet-card">
-              <div class="card-head">
-                <div>
-                  <span class="card-kicker">Calidad y control</span>
-                  <h3>Chequeos operativos</h3>
-                </div>
-              </div>
-              <div id="monitor-alert-list" class="monitor-list"></div>
-            </article>
           </div>
         </section>
 
         <!-- BUSES EN OPERACIÓN -->
+<!-- BUSES EN OPERACIÓN -->
 
         <section id="tab-buses" class="page-panel" style="display:none">
           <div class="panel-intro">
