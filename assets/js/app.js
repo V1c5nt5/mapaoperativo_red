@@ -79,7 +79,9 @@ var BUS_STATE = {
   decoReady:false,
   decoIndex:null,
   visibleCount:0,
-  catalogRoutes:0
+  catalogRoutes:0,
+  blocked:false,
+  blockMessage:''
 };
 var busLayer = null, busRefreshTimer = null, busRequestToken = 0;
 var simMap = null, simShapeLayer = null, simVehicleLayer = null, simShapeKey = '';
@@ -639,6 +641,8 @@ async function handleFile(file, decoFile, paramItem, mode){
   BUS_STATE.decoIndex=null;
   BUS_STATE.features=[];
   BUS_STATE.lastLoadedAt=null;
+  BUS_STATE.blocked=false;
+  BUS_STATE.blockMessage='';
   DATA.availableSources.gtfs=true;
   DATA.availableSources.deco=!!decoFile;
   DATA.availableSources.param=!!(paramItem && paramItem.file);
@@ -1339,9 +1343,15 @@ function buildMonitoringSummary(){
 function renderMonitoring(){
   var data=buildMonitoringSummary();
   updateMonitorClock();
+  if(BUS_STATE.blocked){
+    renderMonitorBlocked(BUS_STATE.blockMessage);
+    return;
+  }
+  setMonitorDataVisibility(true);
   var status=document.getElementById('monitor-status');
   if(status){
     var dayLabel=new Intl.DateTimeFormat('es-CL',{timeZone:'America/Santiago',weekday:'long'}).format(data.now);
+    status.className='panel-status bus-status monitor-status-card';
     status.innerHTML='<strong>'+busCountText(data.buses.length)+' visibles ahora</strong><span>'+esc((data.demandNow||0).toLocaleString('es-CL'))+' buses deberían estar ahora · '+esc(data.plannedDepartures.toLocaleString('es-CL'))+' buses planificados hoy · '+esc(data.qualityScore+'% de cumplimiento GTFS')+' · '+esc(dayLabel)+'</span>';
   }
   var stats=document.getElementById('monitor-stats');
@@ -1418,13 +1428,12 @@ function renderMonitoring(){
   }
 }
 
-
 function startMonitorRefresh(){
   stopMonitorRefresh();
-  if(CURRENT_MAP_MODE!=='monitor') return;
+  if(CURRENT_MAP_MODE!=='monitor' || BUS_STATE.blocked) return;
   renderMonitoring();
   monitorRefreshTimer=setInterval(function(){
-    if(document.hidden || CURRENT_MAP_MODE!=='monitor') return;
+    if(document.hidden || CURRENT_MAP_MODE!=='monitor' || BUS_STATE.blocked) return;
     renderMonitoring();
   },60000);
 }
@@ -3020,6 +3029,56 @@ function formatBusDate(value){
     day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'
   }).format(date);
 }
+function isPlaceholderBusFeature(feature){
+  if(!feature || feature.type!=='Feature') return false;
+  var properties=feature.properties||{};
+  var geometry=feature.geometry||{};
+  var coordinates=geometry.coordinates||[];
+  return geometry.type==='Point' &&
+    Number(coordinates[0])===0 && Number(coordinates[1])===0 &&
+    String(properties.route_direction||'').trim()==='' &&
+    String(properties.license_plate||'').trim()==='' &&
+    Number(properties.speed||0)===0 &&
+    (String(properties.operator||'').trim()==='0' || String(properties.operator||'').trim()==='') &&
+    String(properties.route_code||'').trim()==='';
+}
+function isPlaceholderBusPayload(features){
+  return Array.isArray(features) && features.length===1 && isPlaceholderBusFeature(features[0]);
+}
+function setMonitorDataVisibility(visible){
+  var ids=['monitor-stats'];
+  ids.forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.style.display=visible?'':'none';
+  });
+  ['monitor-chart-grid','monitor-lists-grid'].forEach(function(cls){
+    document.querySelectorAll('.'+cls).forEach(function(el){
+      el.style.display=visible?'':'none';
+    });
+  });
+}
+function renderMonitorBlocked(message){
+  var status=document.getElementById('monitor-status');
+  if(status){
+    status.className='panel-status bus-status monitor-status-card is-error';
+    status.innerHTML='<strong>Monitoreo bloqueado</strong><span>'+
+      esc(message||'La fuente principal devolvió una respuesta vacía o inválida. No se puede usar Monitoreo hasta que la consulta vuelva a entregar buses válidos.')+
+      '</span><button type="button" class="secondary-action compact-action" style="margin-top:10px;align-self:flex-start" onclick="retryBusMonitoring()">Reintentar</button>';
+  }
+  setMonitorDataVisibility(false);
+}
+function retryBusMonitoring(){
+  BUS_STATE.blocked=false;
+  BUS_STATE.blockMessage='';
+  if(CURRENT_MAP_MODE==='monitor'){
+    var status=document.getElementById('monitor-status');
+    if(status){
+      status.className='panel-status bus-status monitor-status-card is-loading';
+      status.innerHTML='<strong>Reintentando</strong><span>Volviendo a consultar la fuente en tiempo real…</span>';
+    }
+  }
+  loadBusData(true);
+}
 function buildBusDecoIndex(rows){
   var index={
     CODIGO_RUTA:Object.create(null),
@@ -3133,7 +3192,13 @@ async function fetchBusEndpoint(url){
     });
     if(!response.ok) throw new Error('HTTP '+response.status);
     var text=await response.text();
-    return extractBusFeatures(text);
+    var features=extractBusFeatures(text);
+    if(String(url||'').indexOf('all-buses-data=1')!==-1 && isPlaceholderBusPayload(features)){
+      var err=new Error('La fuente principal de Monitoreo devolvió una respuesta vacía o inválida.');
+      err.busBlocking=true;
+      throw err;
+    }
+    return features;
   }finally{
     if(timeout) clearTimeout(timeout);
   }
@@ -3394,6 +3459,8 @@ async function applyBusFeatureLists(featureLists, sourceCount, sourceErrors){
   BUS_STATE.sourceCount=sourceCount;
   BUS_STATE.sourceErrors=sourceErrors||[];
   BUS_STATE.lastLoadedAt=new Date();
+  BUS_STATE.blocked=false;
+  BUS_STATE.blockMessage='';
   fillBusOperatorOptions();
   updateBusRouteOptions();
   if(CURRENT_MAP_MODE==='buses') renderBusLayer();
@@ -3414,20 +3481,31 @@ async function loadBusData(force){
     await ensureBusDeco();
     var results=await Promise.allSettled(BUS_ENDPOINTS.map(fetchBusEndpoint));
     if(token!==busRequestToken) return;
-    var lists=[], errors=[];
+    var lists=[], errors=[], blockingError=null;
     results.forEach(function(result,index){
       if(result.status==='fulfilled') lists.push(result.value);
-      else errors.push('Fuente '+(index+1)+': '+(result.reason&&result.reason.message||'sin respuesta'));
+      else{
+        var reason=result.reason||{};
+        errors.push('Fuente '+(index+1)+': '+(reason&&reason.message||'sin respuesta'));
+        if(reason.busBlocking && !blockingError) blockingError=reason;
+      }
     });
+    if(blockingError) throw blockingError;
     if(!lists.length) throw new Error('Las dos fuentes rechazaron la solicitud.');
     await applyBusFeatureLists(lists,lists.length,errors);
   }catch(error){
     console.error(error);
-    setBusStatus(
-      'No se pudieron cargar los buses',
-      'No fue posible consultar las posiciones. Intenta actualizar nuevamente más tarde.',
-      'error'
-    );
+    BUS_STATE.blocked=!!(error && error.busBlocking);
+    BUS_STATE.blockMessage=BUS_STATE.blocked ? (error.message || 'La fuente principal devolvió una respuesta vacía o inválida.') : '';
+    if(BUS_STATE.blocked && CURRENT_MAP_MODE==='monitor'){
+      renderMonitorBlocked(BUS_STATE.blockMessage);
+    }else{
+      setBusStatus(
+        BUS_STATE.blocked ? 'Monitoreo bloqueado' : 'No se pudieron cargar los buses',
+        BUS_STATE.blocked ? BUS_STATE.blockMessage : 'No fue posible consultar las posiciones. Intenta actualizar nuevamente más tarde.',
+        'error'
+      );
+    }
   }finally{
     if(token===busRequestToken) BUS_STATE.loading=false;
     if(CURRENT_MAP_MODE==='buses') startBusRefresh();
