@@ -72,6 +72,11 @@
         <div class="availability-empty">Buscando la información más reciente…</div>
       </div>
       <div class="dataset-link-note" id="realtime-dataset-note">La fecha se selecciona automáticamente.</div>
+      <div class="launch-error-box" id="realtime-launch-error" hidden aria-live="polite">
+        <strong id="realtime-launch-error-title">Monitoreo no disponible</strong>
+        <p id="realtime-launch-error-text">No se pudo verificar una de las fuentes en tiempo real.</p>
+        <button class="secondary-action compact-action" type="button" onclick="retryRealtimeLaunch()">Reintentar</button>
+      </div>
     </div>
 
     <button class="primary-action launch-action" id="btn-load-dataset" type="button" onclick="loadSelectedLaunchMode()" disabled>

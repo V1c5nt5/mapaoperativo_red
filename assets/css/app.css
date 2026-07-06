@@ -220,6 +220,19 @@ select:disabled{background-color:#f0f2f3;color:var(--muted-2)}
 .dataset-link-note.is-ready{border-color:var(--green);background:#f4fbf6}
 .dataset-link-note.is-warning{border-color:var(--amber);background:#fff9f2}
 .launch-form>.primary-action{width:100%;margin-top:2px}
+.dataset-link-note.is-warning{border-color:var(--amber);background:#fff9f2}
+.launch-form>.primary-action{width:100%;margin-top:2px}
+
+.launch-error-box{
+  margin-top:12px;
+  padding:14px 14px 12px;
+  border:1px solid #f0b4af;
+  border-left:4px solid var(--danger);
+  border-radius:12px;
+  background:#fff7f6;
+}
+.launch-error-box strong{display:block;font-size:13px;color:var(--danger)}
+.launch-error-box p{margin:6px 0 10px;color:var(--muted);font-size:12px;line-height:1.45}
 
 /* Aplicación */
 .app-shell{display:none;min-height:100vh}

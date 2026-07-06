@@ -245,9 +245,52 @@ function updateRealtimeAvailability(){
   note.className='dataset-link-note is-ready';
   if(APP_MODE==='realtime') btn.disabled=false;
 }
-function loadSelectedLaunchMode(){
-  if(APP_MODE==='realtime') loadLatestRealtime();
-  else loadSelectedMainGTFS();
+function setRealtimeLaunchError(message){
+  var box=document.getElementById('realtime-launch-error');
+  var title=document.getElementById('realtime-launch-error-title');
+  var textEl=document.getElementById('realtime-launch-error-text');
+  var btn=document.getElementById('btn-load-dataset');
+  if(title) title.textContent='Monitoreo no disponible';
+  if(textEl) textEl.textContent=message || 'No se pudo verificar una de las fuentes en tiempo real.';
+  if(box) box.hidden=false;
+  if(btn) btn.disabled=false;
+}
+function clearRealtimeLaunchError(){
+  var box=document.getElementById('realtime-launch-error');
+  if(box) box.hidden=true;
+}
+async function verifyRealtimeSources(){
+  var results=await Promise.allSettled(BUS_ENDPOINTS.map(fetchBusEndpoint));
+  var errors=[];
+  results.forEach(function(result,index){
+    if(result.status==='rejected') errors.push('Fuente '+(index+1)+': '+((result.reason&&result.reason.message)||'sin respuesta'));
+  });
+  if(errors.length){
+    var err=new Error(errors.join(' · '));
+    err.busBlocking=true;
+    throw err;
+  }
+  return results.map(function(result){ return result.value; });
+}
+async function loadSelectedLaunchMode(){
+  clearRealtimeLaunchError();
+  if(APP_MODE==='realtime'){
+    try{
+      prog(2,'Verificando fuentes en tiempo real…');
+      await verifyRealtimeSources();
+      await loadLatestRealtime();
+    }catch(err){
+      console.error(err);
+      prog(0,'No se pudo verificar Monitoreo.');
+      setRealtimeLaunchError(err && err.message ? err.message : 'No se pudo verificar una de las fuentes en tiempo real.');
+    }
+  }else{
+    loadSelectedMainGTFS();
+  }
+}
+function retryRealtimeLaunch(){
+  clearRealtimeLaunchError();
+  loadSelectedLaunchMode();
 }
 function linkedDatasetForDate(targetDate){
   var targetKey=dateKey(targetDate);
@@ -3193,8 +3236,8 @@ async function fetchBusEndpoint(url){
     if(!response.ok) throw new Error('HTTP '+response.status);
     var text=await response.text();
     var features=extractBusFeatures(text);
-    if(String(url||'').indexOf('all-buses-data=1')!==-1 && isPlaceholderBusPayload(features)){
-      var err=new Error('La fuente principal de Monitoreo devolvió una respuesta vacía o inválida.');
+    if(isPlaceholderBusPayload(features)){
+      var err=new Error('La fuente '+(String(url||'').indexOf('all-buses-data=1')!==-1?'principal ':'')+'de Monitoreo devolvió una respuesta vacía o inválida.');
       err.busBlocking=true;
       throw err;
     }
