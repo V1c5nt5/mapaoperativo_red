@@ -8175,6 +8175,13 @@
     "year": 2023,
     "model": "Caio Mondego II MA"
   },
+    "SHCY99": {
+    "unit": "900028",
+    "type": "B2",
+    "tech": "EURO VI",
+    "year": 2023,
+    "model": "Marcopolo Torino New G7 LE"
+  },
   "SHCX10": {
     "unit": "900021",
     "type": "B2",
@@ -43308,6 +43315,13 @@
     "year": 2019,
     "model": "Marcopolo Torino Low Entry"
   },
+    "LJDL47": {
+    "unit": "900025",
+    "type": "B2",
+    "tech": "EURO VI",
+    "year": 2019,
+    "model": "Marcopolo Torino Low Entry"
+  },
   "LDJJ68": {
     "unit": "900025",
     "type": "B2",
@@ -72135,6 +72149,13 @@
     "model": "Yutong E12 Pro - ZK6128B EVG"
   },
   "VHZX60": {
+    "unit": "900034",
+    "type": "B2",
+    "tech": "VPE",
+    "year": 2025,
+    "model": "Yutong E12 Pro - ZK6128B EVG"
+  },
+    "VHZX61": {
     "unit": "900034",
     "type": "B2",
     "tech": "VPE",
