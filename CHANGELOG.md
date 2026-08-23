@@ -1,8 +1,8 @@
-# Changelog v3.2.2 - Mapa Operativo RED
+# Changelog v2.3.2 - Mapa Operativo RED
 
-## 🎨 [3.2.2] - 2026-08-23
+## ✨ [2.3.2] - 2026-08-23
 
-### ✨ Cambios principales
+### 🎨 Cambios principales
 
 #### Sistema de Diseño Completo
 - ✅ **7 archivos CSS modularizados** (~2,830 líneas)
@@ -51,7 +51,7 @@ assets/css/
 ├── 06-panels-and-modals.css  (420 líneas) - Solapas, drawers, modales
 └── 07-animations.css         (350 líneas) - Transiciones, efectos
 
-index-v3.2.2.html             Nueva versión HTML restructurada
+index-v2.3.2.html             Nueva versión HTML restructurada
 DESIGN_SYSTEM.md               Guía completa de diseño
 CHANGELOG.md                   Este archivo
 ```
@@ -88,7 +88,7 @@ CHANGELOG.md                   Este archivo
 - **Body**: Inter (cuerpo, UI)
 - **Mono**: IBM Plex Mono (datos, horarios, códigos)
 
-### 📐 Espaciado (8px grid)
+### 📏 Espaciado (8px grid)
 
 ```
 --space-1: 4px
@@ -166,7 +166,7 @@ CHANGELOG.md                   Este archivo
 ### 🚀 Cómo usar
 
 #### Instalación
-1. Usar `index-v3.2.2.html` como punto de partida
+1. Usar `index-v2.3.2.html` como punto de partida
 2. Incluir todos los archivos CSS en orden
 3. Integrar lógica JavaScript existente
 
@@ -204,27 +204,26 @@ Ver `DESIGN_SYSTEM.md` para:
 - Patrones recomendados
 - Mejores prácticas
 
-### 🔮 Próximas versiones
+### 🔜 Próximas versiones
 
-**v3.2.3** (Integración JavaScript)
-- Funcionalidad de componentes interactivos
-- Navegación entre tabs
-- Modal dialogs
-- Toast notifications
+**v2.3.3** (Fixes y refinamientos)
+- Ajustes de UI basados en feedback
+- Optimizaciones de performance
+- Mejoras en accesibilidad
 
-**v3.3.0** (Dark mode)
+**v2.4.0** (Dark mode)
 - Tema oscuro completo
 - Toggle light/dark
 - Persistencia de preferencia
 
-**v3.4.0** (Sistema de iconos)
+**v2.5.0** (Sistema de iconos)
 - SVG sprite de iconos
 - Variaciones de tamaño
 - Animaciones de iconos
 
 ---
 
-**Rama:** `feature/v3.2.2-redesign`
-**Commits:** 3 principales
+**Rama:** `feature/v2.3.2-redesign`
+**Commits:** 4 principales
 **Líneas de código:** +2,830 CSS, +550 HTML, +270 Markdown
 **Tiempo de desarrollo:** Optimizado con modularidad

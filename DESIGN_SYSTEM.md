@@ -1,4 +1,4 @@
-# Guía de Diseño v3.2.2 - Mapa Operativo RED
+# Guía de Diseño v2.3.2 - Mapa Operativo RED
 
 ## 📋 Tabla de Contenidos
 1. [Descripción General](#descripción-general)
@@ -15,7 +15,7 @@
 
 ## Descripción General
 
-**Versión 3.2.2** introduce una arquitectura visual completamente renovada con enfoque en:
+**Versión 2.3.2** introduce una arquitectura visual completamente renovada con enfoque en:
 
 - ✅ **Institucional**: Branding RED coherente en toda la experiencia
 - ✅ **Organización**: Información jerárquica clara y navegable
@@ -463,7 +463,7 @@ Respetamos `prefers-reduced-motion`:
 </head>
 ```
 
-### Clases CSS comúnes
+### Clases CSS comunes
 
 ```html
 <!-- Espaciado -->
@@ -484,13 +484,13 @@ Respetamos `prefers-reduced-motion`:
 
 ## Próximos Pasos
 
-1. ✅ **v3.2.2** → Sistema de diseño base
-2. 🔄 **v3.2.3** → Integración con lógica JavaScript
-3. 🔄 **v3.3.0** → Dark mode completo
-4. 🔄 **v3.4.0** → Sistema de iconos SVG
+1. ✅ **v2.3.2** → Sistema de diseño base
+2. 🔄 **v2.3.3** → Fixes y refinamientos
+3. 🔄 **v2.4.0** → Dark mode completo
+4. 🔄 **v2.5.0** → Sistema de iconos SVG
 
 ---
 
 **Última actualización:** 2026-08-23
-**Versión:** 3.2.2
+**Versión:** 2.3.2
 **Autor:** Equipo RED
