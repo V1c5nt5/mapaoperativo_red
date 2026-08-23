@@ -1,0 +1,400 @@
+/* ========================================================
+   v3.2.2 PANELES Y MODALES
+   Solapas, drawers, popups, modales
+   ======================================================== */
+
+/* ========================================================
+   PANELES CON SOLAPAS
+   ======================================================== */
+
+.tab-panel {
+  display: none;
+  animation: fadeIn 0.2s ease;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ========================================================
+   DRAWER / PANEL LATERAL
+   ======================================================== */
+
+.side-drawer {
+  position: fixed;
+  top: var(--header-height);
+  left: 0;
+  width: 320px;
+  height: calc(100dvh - var(--header-height) - var(--dock-height));
+  background-color: var(--surface-white);
+  border-right: 1px solid var(--line-default);
+  box-shadow: var(--shadow-md);
+  transform: translateX(-100%);
+  transition: transform var(--transition-normal);
+  z-index: var(--z-modal);
+  overflow-y: auto;
+}
+
+.side-drawer.open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  position: sticky;
+  top: 0;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--line-default);
+  background-color: var(--surface-white);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.drawer-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--ink);
+}
+
+.drawer-close {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.drawer-close:hover {
+  background-color: var(--surface-alt);
+  color: var(--ink);
+}
+
+.drawer-body {
+  padding: var(--space-4);
+}
+
+.drawer-section {
+  margin-bottom: var(--space-6);
+}
+
+.drawer-section-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space-3);
+}
+
+/* ========================================================
+   MODALES
+   ======================================================== */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal-backdrop);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal-overlay.open {
+  display: flex;
+}
+
+.modal {
+  background-color: var(--surface-white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-xl);
+  max-width: 600px;
+  width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--line-default);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.modal-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--ink);
+}
+
+.modal-close {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  font-size: var(--text-2xl);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.modal-close:hover {
+  background-color: var(--surface-alt);
+  color: var(--ink);
+}
+
+.modal-body {
+  flex: 1;
+  padding: var(--space-6);
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--line-default);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  background-color: var(--surface-alt);
+}
+
+/* ========================================================
+   POPOVER / TOOLTIP
+   ======================================================== */
+
+.popover {
+  position: absolute;
+  background-color: var(--surface-white);
+  border: 1px solid var(--line-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-popover);
+  display: none;
+  min-width: 200px;
+}
+
+.popover.visible {
+  display: block;
+}
+
+.tooltip {
+  position: absolute;
+  background-color: var(--ink);
+  color: white;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  z-index: var(--z-tooltip);
+  display: none;
+  pointer-events: none;
+}
+
+.tooltip.visible {
+  display: block;
+}
+
+/* ========================================================
+   DROPDOWN MENU
+   ======================================================== */
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background-color: var(--surface-white);
+  border: 1px solid var(--line-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 200px;
+  display: none;
+  z-index: var(--z-dropdown);
+  overflow: hidden;
+  animation: slideDown 0.15s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-menu.open {
+  display: block;
+}
+
+.dropdown-item {
+  padding: var(--space-3) var(--space-4);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-size: var(--text-sm);
+}
+
+.dropdown-item:hover {
+  background-color: var(--surface-alt);
+}
+
+.dropdown-item.active {
+  background-color: var(--red-pale);
+  color: var(--red-primary);
+  font-weight: var(--font-semibold);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: var(--line-default);
+  margin: var(--space-1) 0;
+}
+
+/* ========================================================
+   NOTIFICACIONES
+   ======================================================== */
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background-color: var(--surface-white);
+  border: 1px solid var(--line-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-lg);
+  z-index: var(--z-notification);
+  max-width: 400px;
+  animation: slideUp 0.3s ease;
+}
+
+.toast-success {
+  border-left: 4px solid var(--success);
+  background-color: var(--success-bg);
+  color: var(--success);
+}
+
+.toast-error {
+  border-left: 4px solid var(--error);
+  background-color: var(--error-bg);
+  color: var(--error);
+}
+
+.toast-warning {
+  border-left: 4px solid var(--warning);
+  background-color: var(--warning-bg);
+  color: var(--warning);
+}
+
+.toast-info {
+  border-left: 4px solid var(--info);
+  background-color: var(--info-bg);
+  color: var(--info);
+}
+
+.toast-title {
+  font-weight: var(--font-bold);
+  margin-bottom: var(--space-1);
+}
+
+.toast-message {
+  font-size: var(--text-sm);
+}
+
+.toast-close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+.toast-close:hover {
+  opacity: 1;
+}
+
+/* ========================================================
+   RESPONSIVE
+   ======================================================== */
+
+@media (max-width: 768px) {
+  .modal {
+    width: 95vw;
+    max-height: 85vh;
+  }
+  
+  .side-drawer {
+    width: 80vw;
+    max-width: 320px;
+  }
+  
+  .toast {
+    bottom: 16px;
+    right: 16px;
+    left: 16px;
+    max-width: none;
+  }
+}
