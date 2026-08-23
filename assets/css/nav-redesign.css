@@ -1,0 +1,251 @@
+/* ===================================================================
+   v3.0.0 — Rediseño de navegación superior
+   Se carga después de app.css: solo añade/():sobrescribe reglas del
+   header y quita el dock inferior. No toca la lógica (#tab-*, .tab-btn,
+   data-tab, onclick=switchTab(...) se mantienen intactos).
+   =================================================================== */
+
+:root{
+  --geo-dock:0px;               /* ya no hay dock inferior */
+  --geo-header:118px;           /* header en 2 filas */
+  --nav-pill:10px;
+  --topnav-bg:#12181d;
+  --topnav-bg-2:#1a2129;
+  --topnav-line:rgba(255,255,255,.08);
+}
+
+/* -------- estructura general del header -------- */
+.topnav{
+  position:absolute;
+  z-index:1200;
+  top:0;left:0;right:0;
+  display:flex;
+  flex-direction:column;
+  background:linear-gradient(180deg,var(--topnav-bg) 0%,var(--topnav-bg-2) 100%);
+  border-bottom:1px solid var(--topnav-line);
+  box-shadow:0 6px 24px rgba(10,14,18,.18);
+  font-family:var(--font-body);
+}
+.topnav::after{
+  content:"";
+  display:block;
+  height:3px;
+  background:linear-gradient(90deg,var(--red) 0 10%,#f3b8ab 10% 12%,transparent 12%);
+  background-size:64px 3px;
+  opacity:.9;
+}
+.topnav-row{
+  display:flex;
+  align-items:center;
+  gap:22px;
+  padding:12px 20px 10px;
+}
+.topnav-context{
+  padding:0 22px 12px;
+}
+.topnav-context h1{
+  margin:0;
+  font-size:15px;
+  color:#fff;
+  font-weight:600;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  opacity:.92;
+}
+
+/* -------- marca -------- */
+.topnav-brand{
+  flex:0 0 auto;
+  color:#fff;
+}
+.topnav-brand .brand-symbol{
+  background:var(--red);
+  color:#fff;
+  border-radius:9px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:36px;height:36px;
+  box-shadow:0 3px 10px rgba(211,48,31,.45);
+}
+.topnav-brand strong{
+  display:block;
+  font-family:var(--font-display);
+  font-size:14.5px;
+  letter-spacing:-.01em;
+}
+.topnav-brand small{
+  display:block;
+  margin-top:1px;
+  font-family:var(--font-mono);
+  font-size:10px;
+  letter-spacing:.07em;
+  text-transform:uppercase;
+  color:var(--red);
+  opacity:.9;
+}
+
+/* -------- navegación principal -------- */
+.topnav-primary{
+  display:flex;
+  align-items:center;
+  gap:4px;
+  flex:1 1 auto;
+  min-width:0;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.topnav-primary::-webkit-scrollbar{display:none}
+
+.topnav-primary .tab-btn{
+  width:auto;
+  flex:0 0 auto;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  padding:9px 14px;
+  border-radius:999px;
+  color:rgba(255,255,255,.66);
+  background:transparent;
+  font-size:12.5px;
+  font-weight:600;
+  letter-spacing:.01em;
+  white-space:nowrap;
+  border:1px solid transparent;
+  transition:background .15s ease,color .15s ease,border-color .15s ease,transform .1s ease;
+}
+.topnav-primary .tab-btn .nav-icon{
+  width:auto;
+  font-size:13px;
+  opacity:.85;
+}
+.topnav-primary .tab-btn:hover{
+  color:#fff;
+  background:rgba(255,255,255,.08);
+  border-color:var(--topnav-line);
+}
+.topnav-primary .tab-btn:active{transform:scale(.97)}
+.topnav-primary .tab-btn.active{
+  color:#fff;
+  background:var(--red);
+  border-color:var(--red);
+  box-shadow:0 3px 10px rgba(211,48,31,.35);
+}
+.topnav-primary .tab-btn.active .nav-icon{opacity:1}
+
+/* separador visual antes de "Archivos" (primer botón, va suelto) */
+.topnav-primary .tab-btn:first-child{
+  color:rgba(255,255,255,.8);
+  background:rgba(255,255,255,.05);
+  border-color:var(--topnav-line);
+  margin-right:6px;
+}
+.topnav-primary .tab-btn:first-child:hover{background:rgba(255,255,255,.12)}
+
+/* -------- menú "Más" -------- */
+.topnav-more{position:relative;flex:0 0 auto}
+.topnav-more-menu{
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  min-width:190px;
+  padding:6px;
+  background:#fff;
+  border-radius:12px;
+  box-shadow:0 12px 32px rgba(10,14,18,.28);
+  border:1px solid var(--line);
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  z-index:1400;
+}
+.topnav-more-menu[hidden]{display:none}
+.topnav-more-menu .tab-btn{
+  width:100%;
+  color:var(--muted);
+  background:transparent;
+  border-radius:8px;
+  padding:9px 10px;
+  font-size:12.5px;
+}
+.topnav-more-menu .tab-btn:hover{background:var(--surface-2);color:var(--ink)}
+.topnav-more-menu .tab-btn.active{background:var(--red-soft);color:var(--red)}
+.topnav-more:has(.topnav-more-menu .tab-btn.active) .topnav-more-trigger{
+  color:#fff;
+  background:rgba(255,255,255,.1);
+  border-color:var(--topnav-line);
+}
+
+/* -------- acciones a la derecha -------- */
+.topnav-actions{
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex:0 0 auto;
+  min-width:0;
+}
+.topnav .data-age{
+  margin:0;
+  max-width:230px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:10.5px;
+  color:rgba(255,255,255,.55);
+}
+.topnav .source-summary{
+  padding:5px 12px;
+  border-left:1px solid var(--topnav-line);
+  color:rgba(255,255,255,.55);
+  font-size:10.5px;
+  line-height:1.3;
+  max-width:220px;
+}
+.topnav .source-summary strong{color:#fff;font-size:11.5px}
+.topnav #btn-reload{
+  background:rgba(255,255,255,.08);
+  color:#fff;
+  border:1px solid var(--topnav-line);
+}
+.topnav #btn-reload:hover{background:rgba(255,255,255,.16)}
+
+/* -------- geometría del workspace: sin dock inferior -------- */
+.geo-workspace{inset:var(--geo-header) 0 0 0}
+.map-dock{display:none}
+body[data-map-mode="monitor"] .geo-workspace{inset:var(--geo-header) 0 0 0}
+
+/* -------- responsive -------- */
+@media (max-width:960px){
+  :root{--geo-header:112px}
+  .topnav-row{gap:12px;padding:10px 12px 8px}
+  .topnav-context{padding:0 14px 10px}
+  .topnav-actions .source-summary{display:none}
+  .topnav-primary .tab-btn span:not(.nav-icon){display:none}
+  .topnav-primary .tab-btn{padding:9px 11px}
+  .topnav-primary .tab-btn:first-child{margin-right:2px}
+  .topnav-more-menu .tab-btn span:not(.nav-icon){display:inline}
+}
+@media (max-width:640px){
+  :root{--geo-header:104px}
+  .topnav-brand small{display:none}
+  .topnav .data-age{display:none}
+}
+
+/* -------- retoques a la pantalla de inicio (Archivos) -------- */
+.launch-topbar .brand-symbol{
+  background:var(--red);
+  color:#fff;
+  box-shadow:0 3px 10px rgba(211,48,31,.35);
+}
+.launch-card{
+  border-radius:20px;
+  box-shadow:0 24px 60px rgba(10,14,18,.16);
+}
+.launch-mode-card.active{
+  border-color:var(--red);
+  box-shadow:0 0 0 3px var(--red-soft);
+}
+.primary-action.launch-action{
+  border-radius:999px;
+  font-weight:700;
+  letter-spacing:.01em;
+}
