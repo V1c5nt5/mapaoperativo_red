@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#d3301f">
+  <meta name="description" content="Mapa Operativo RED v3.2.2 - Consulta recorridos, paraderos, horarios y buses en circulación">
+  
+  <title>Mapa Operativo RED v3.2.2</title>
+  
+  <!-- FUENTES -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  
+  <!-- LIBRERÍAS EXTERNAS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- DESIGN SYSTEM -->
+  <link rel="stylesheet" href="assets/css/01-design-system.css">
+  <link rel="stylesheet" href="assets/css/02-components.css">
+  <link rel="stylesheet" href="assets/css/03-layout.css">
+  <link rel="stylesheet" href="assets/css/04-theme-light.css">
+</head>
+<body>
+  <!-- PANTALLA DE INICIO -->
+  <div id="launch-screen" class="launch-screen">
+    <header class="launch-header">
+      <div class="launch-container">
+        <div class="launch-brand">
+          <div class="brand-icon">
+            <svg viewBox="0 0 48 48" width="32" height="32">
+              <path d="M10 34 17 14h14l7 20M14 26h20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="brand-name">Mapa Operativo RED</h1>
+            <p class="brand-subtitle">Consulta de transporte Santiago</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="launch-main">
+      <div class="launch-container">
+        <div class="launch-card">
+          <div class="launch-header-card">
+            <span class="launch-step">Paso 1</span>
+            <h2>¿Qué deseas consultar?</h2>
+            <p>Selecciona el tipo de información que necesitas</p>
+          </div>
+
+          <!-- SELECCIÓN DE MODO -->
+          <div class="launch-modes" role="radiogroup" aria-label="Tipo de consulta">
+            <button class="launch-mode active" id="mode-static" type="button" role="radio" aria-checked="true" onclick="setLaunchMode('static')">
+              <div class="mode-icon">📅</div>
+              <div class="mode-content">
+                <strong>Por fecha</strong>
+                <span>Recorridos y horarios programados</span>
+              </div>
+              <div class="mode-check">✓</div>
+            </button>
+
+            <button class="launch-mode" id="mode-realtime" type="button" role="radio" aria-checked="false" onclick="setLaunchMode('realtime')">
+              <div class="mode-icon">🚌</div>
+              <div class="mode-content">
+                <strong>Ahora</strong>
+                <span>Buses en tiempo real y circulación</span>
+              </div>
+              <div class="mode-check">✓</div>
+            </button>
+          </div>
+
+          <!-- OPCIONES ESTÁTICAS -->
+          <div id="static-options" class="launch-options active">
+            <div class="form-group">
+              <label class="form-label" for="dataset-date">Selecciona una fecha</label>
+              <select id="dataset-date" class="form-select">
+                <option value="">Cargando fechas disponibles...</option>
+              </select>
+              <p class="form-hint">Se mostrarán los recorridos y horarios de esta fecha</p>
+            </div>
+
+            <div id="availability-static" class="availability-grid">
+              <div class="availability-empty">Selecciona una fecha para ver disponibilidad</div>
+            </div>
+          </div>
+
+          <!-- OPCIONES EN TIEMPO REAL -->
+          <div id="realtime-options" class="launch-options">
+            <div id="availability-realtime" class="availability-grid">
+              <div class="availability-empty">Buscando información reciente...</div>
+            </div>
+            <p class="launch-note" id="realtime-note">La información se actualiza automáticamente</p>
+          </div>
+
+          <!-- BO TÓN DE ACCÓN -->
+          <button class="btn btn-primary btn-lg btn-full mt-4" id="btn-launch" disabled>
+            <span id="btn-launch-text">Abrir recorridos y horarios</span>
+            <span aria-hidden="true">→</span>
+          </button>
+
+          <!-- INDICADOR DE PROGRESO -->
+          <div class="launch-progress" id="launch-progress" style="display: none;">
+            <div class="progress-bar">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p class="progress-text" id="progress-text">Iniciando...</p>
+          </div>
+
+          <footer class="launch-footer">
+            <p>Versión 3.2.2 <span class="dot">•</span> Datos actualizados en tiempo real</p>
+          </footer>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- APLICACIÓN PRINCIPAL -->
+  <div id="app" class="app-wrapper" style="display: none;">
+    <!-- HEADER -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="header-logo">
+          <svg viewBox="0 0 48 48">
+            <path d="M10 34 17 14h14l7 20M14 26h20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="header-title">
+          <h1>Mapa Operativo</h1>
+          <p>RED Santiago</p>
+        </div>
+      </div>
+
+      <div class="header-context">
+        <p class="header-meta" id="page-meta">Cobertura metropolitana</p>
+        <h2 class="header-name" id="page-title">Mapa de Santiago</h2>
+      </div>
+
+      <div class="header-actions">
+        <div class="header-info" id="header-info">
+          <strong id="data-date">Fecha</strong>
+          <span id="data-status">Sin cargar</span>
+        </div>
+        <button class="btn btn-icon btn-secondary" id="btn-reload" style="display: none;" onclick="location.reload()" title="Volver al inicio">
+          <span aria-hidden="true">↺</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- SIDEBAR -->
+    <aside class="app-sidebar">
+      <div class="sidebar-brand">
+        <div class="sidebar-logo">
+          <svg viewBox="0 0 48 48" width="20" height="20">
+            <path d="M10 34 17 14h14l7 20M14 26h20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <p class="sidebar-title">RED</p>
+          <p class="sidebar-subtitle">v3.2.2</p>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-tab="resumen" onclick="switchTab('resumen')">
+          <span class="nav-icon">🗺️</span>
+          <span class="nav-label">Resumen</span>
+        </button>
+        <button class="nav-item" data-tab="buses" onclick="switchTab('buses')">
+          <span class="nav-icon">🚌</span>
+          <span class="nav-label">Buses</span>
+        </button>
+        <button class="nav-item" data-tab="ruta" onclick="switchTab('ruta')">
+          <span class="nav-icon">📍</span>
+          <span class="nav-label">Recorridos</span>
+        </button>
+        <button class="nav-item" data-tab="paradero" onclick="switchTab('paradero')">
+          <span class="nav-icon">🛑</span>
+          <span class="nav-label">Paraderos</span>
+        </button>
+        <button class="nav-item" data-tab="monitor" onclick="switchTab('monitor')">
+          <span class="nav-icon">📊</span>
+          <span class="nav-label">Monitor</span>
+        </button>
+        <button class="nav-item" data-tab="simulacion" onclick="switchTab('simulacion')">
+          <span class="nav-icon">⏱️</span>
+          <span class="nav-label">Simulación</span>
+        </button>
+        <button class="nav-item" data-tab="comparar" onclick="switchTab('comparar')">
+          <span class="nav-icon">⚖️</span>
+          <span class="nav-label">Comparar</span>
+        </button>
+        <button class="nav-item" data-tab="parametros" onclick="switchTab('parametros')">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-label">Parámetros</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="sidebar-data">
+          <span class="sidebar-label">Información</span>
+          <p class="sidebar-value" id="sidebar-info">Sin datos cargados</p>
+        </div>
+        <p class="sidebar-version">Versión 3.2.2</p>
+      </div>
+    </aside>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <main class="app-main">
+      <div class="app-content">
+        <!-- TAB: RESUMEN -->
+        <section id="tab-resumen" class="tab-panel active">
+          <div class="section-header">
+            <div>
+              <p class="section-meta">Información general</p>
+              <h2 class="section-title">Resumen de la red</h2>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card">
+              <p class="stat-label">Recorridos activos</p>
+              <p class="stat-value" id="stat-routes">-</p>
+              <p class="stat-hint">día tipo seleccionado</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Salidas estimadas</p>
+              <p class="stat-value" id="stat-departures">-</p>
+              <p class="stat-hint">en la red</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Paradas utilizadas</p>
+              <p class="stat-value" id="stat-stops">-</p>
+              <p class="stat-hint">con atención</p>
+            </div>
+            <div class="stat-card">
+              <p class="stat-label">Ventana de servicio</p>
+              <p class="stat-value" id="stat-window">-</p>
+              <p class="stat-hint">primera a última</p>
+            </div>
+          </div>
+
+          <div class="card mt-4">
+            <div class="card-header">
+              <div>
+                <p class="card-meta">Estado de datos</p>
+                <h3 class="card-title">Salud de información</h3>
+              </div>
+            </div>
+            <div class="card-body" id="health-list">
+              <p class="text-muted">Cargando información...</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB: BUSES -->
+        <section id="tab-buses" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Buses en circulación</h2>
+          </div>
+          <div id="buses-container">
+            <p class="text-muted">Cargando información de buses...</p>
+          </div>
+        </section>
+
+        <!-- TAB: RECORRIDOS -->
+        <section id="tab-ruta" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Consulta de recorridos</h2>
+          </div>
+          <div id="route-container">
+            <p class="text-muted">Cargando recorridos...</p>
+          </div>
+        </section>
+
+        <!-- TAB: PARADEROS -->
+        <section id="tab-paradero" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Búsqueda de paraderos</h2>
+          </div>
+          <div id="stop-container">
+            <p class="text-muted">Cargando paraderos...</p>
+          </div>
+        </section>
+
+        <!-- TAB: MONITOR -->
+        <section id="tab-monitor" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Monitoreo en tiempo real</h2>
+          </div>
+          <div id="monitor-container">
+            <p class="text-muted">Conectando con fuentes en tiempo real...</p>
+          </div>
+        </section>
+
+        <!-- TAB: SIMULACIÓN -->
+        <section id="tab-simulacion" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Simulación de horarios</h2>
+          </div>
+          <div id="simulation-container">
+            <p class="text-muted">Preparando simulación...</p>
+          </div>
+        </section>
+
+        <!-- TAB: COMPARAR -->
+        <section id="tab-comparar" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Comparar fechas</h2>
+          </div>
+          <div id="compare-container">
+            <p class="text-muted">Preparando herramienta de comparación...</p>
+          </div>
+        </section>
+
+        <!-- TAB: PARÁMETROS -->
+        <section id="tab-parametros" class="tab-panel" style="display: none;">
+          <div class="section-header">
+            <h2 class="section-title">Indicadores operacionales</h2>
+          </div>
+          <div id="params-container">
+            <p class="text-muted">Cargando indicadores...</p>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- DOCK INFERIOR -->
+    <div class="app-dock">
+      <button class="dock-item active" data-tab="resumen" onclick="switchTab('resumen')" title="Resumen">
+        <span class="dock-icon">🗺️</span>
+        <span>Resumen</span>
+      </button>
+      <button class="dock-item" data-tab="buses" onclick="switchTab('buses')" title="Buses">
+        <span class="dock-icon">🚌</span>
+        <span>Buses</span>
+      </button>
+      <button class="dock-item" data-tab="ruta" onclick="switchTab('ruta')" title="Recorridos">
+        <span class="dock-icon">📍</span>
+        <span>Recorridos</span>
+      </button>
+      <button class="dock-item" data-tab="paradero" onclick="switchTab('paradero')" title="Paraderos">
+        <span class="dock-icon">🛑</span>
+        <span>Paraderos</span>
+      </button>
+      <button class="dock-item" data-tab="monitor" onclick="switchTab('monitor')" title="Monitor">
+        <span class="dock-icon">📊</span>
+        <span>Monitor</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- SCRIPT -->
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
