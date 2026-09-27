@@ -62613,5 +62613,33 @@
     "tech": "VPE",
     "year": 2026,
     "model": "BYD B12S01"
+  },
+  "VZVT34": {
+    "unit": "-",
+    "type": "B2",
+    "tech": "VPE",
+    "year": 2026,
+    "model": "BYD B12S01"
+  },
+  "VZVV52": {
+    "unit": "-",
+    "type": "B2",
+    "tech": "VPE",
+    "year": 2026,
+    "model": "BYD B12S01"
+  },
+  "WCYC97": {
+    "unit": "-",
+    "type": "B2",
+    "tech": "VPE",
+    "year": 2027,
+    "model": "KING LONG XMQ6127G ETECH"
+  },
+  "WCYC94": {
+    "unit": "-",
+    "type": "B2",
+    "tech": "VPE",
+    "year": 2027,
+    "model": "KING LONG XMQ6127G ETECH"
   }
 }
